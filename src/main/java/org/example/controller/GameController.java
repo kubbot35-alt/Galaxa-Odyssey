@@ -4,6 +4,7 @@ import org.example.model.GameModel;
 import org.example.model.GameSave;
 import org.example.model.GameState;
 import org.example.model.Player;
+import org.example.model.enums.DifficultyLevel;
 import org.example.repository.GameSaveRepository;
 import org.example.service.GameService;
 import org.example.service.SettingsService;
@@ -105,11 +106,31 @@ public final class GameController {
 
     public void activateMenu() {
         switch (model.getMenuSelection()) {
-            case 0: startGame(); break;
+            case 0:
+                model.setDifficultySelection(model.getDifficultyLevel().ordinal());
+                soundPlayer.stopMenuMusic();
+                model.setGameState(GameState.DIFFICULTY_SELECTION);
+                break;
             case 1: soundPlayer.stopMenuMusic(); model.setGameState(GameState.UPGRADES); break;
             case 2: soundPlayer.stopMenuMusic(); model.setGameState(GameState.SETTINGS); break;
             default: soundPlayer.stopMenuMusic(); model.setGameState(GameState.HOW_TO_PLAY); break;
         }
+    }
+
+    public void selectDifficulty(int delta) {
+        int optionCount = DifficultyLevel.values().length;
+        model.setDifficultySelection((model.getDifficultySelection() + delta + optionCount) % optionCount);
+    }
+
+    public void activateDifficulty() {
+        DifficultyLevel selected = DifficultyLevel.values()[model.getDifficultySelection()];
+        model.setDifficultyLevel(selected);
+        startGame();
+    }
+
+    public void cancelDifficultySelection() {
+        model.setGameState(GameState.MENU);
+        soundPlayer.startMenuMusic();
     }
 
     public void selectUpgrade(int delta) {

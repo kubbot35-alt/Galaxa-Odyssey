@@ -1,6 +1,7 @@
 package org.example.model;
 
 import org.example.model.enums.PowerUpType;
+import org.example.model.enums.DifficultyLevel;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -10,6 +11,7 @@ public final class GameModel {
     public static final int HEIGHT = 600;
 
     private GameState gameState = GameState.MENU;
+    private DifficultyLevel difficultyLevel = DifficultyLevel.NORMAL;
     private Player player;
     private final List<Bullet> bullets = new ArrayList<Bullet>();
     private final List<Bomb> bombs = new ArrayList<Bomb>();
@@ -28,6 +30,7 @@ public final class GameModel {
     private int menuSelection;
     private int upgradeSelection;
     private int settingsSelection;
+    private int difficultySelection;
 
     public GameModel() {
         for (int i = 0; i < 120; i++) {
@@ -37,6 +40,8 @@ public final class GameModel {
 
     public GameState getGameState() { return gameState; }
     public void setGameState(GameState state) { gameState = state; }
+    public DifficultyLevel getDifficultyLevel() { return difficultyLevel; }
+    public void setDifficultyLevel(DifficultyLevel value) { difficultyLevel = value; }
     public Player getPlayer() { return player; }
     public void setPlayer(Player value) { player = value; }
     public List<Bullet> getBullets() { return bullets; }
@@ -67,6 +72,8 @@ public final class GameModel {
     public void setUpgradeSelection(int value) { upgradeSelection = value; }
     public int getSettingsSelection() { return settingsSelection; }
     public void setSettingsSelection(int value) { settingsSelection = value; }
+    public int getDifficultySelection() { return difficultySelection; }
+    public void setDifficultySelection(int value) { difficultySelection = value; }
 
     public void clearTransientObjects() {
         bullets.clear();

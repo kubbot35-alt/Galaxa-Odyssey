@@ -7,6 +7,7 @@ import org.example.model.GameModel;
 import org.example.model.Player;
 import org.example.model.enums.PowerUpType;
 import org.example.model.enums.SoundType;
+import org.example.model.enums.DifficultyLevel;
 import org.example.model.factory.GameObjectFactory;
 
 import java.util.Iterator;
@@ -38,14 +39,18 @@ public final class GameService {
             bullet.update();
             if (bullet.getY() < -20 || bullet.getY() > GameModel.HEIGHT + 20) iterator.remove();
         }
-        for (Enemy enemy : model.getEnemies()) enemy.update(model.getWave());
+        for (Enemy enemy : model.getEnemies()) {
+            enemy.update(model.getWave(), model.getDifficultyLevel());
+        }
 
         resolvePlayerBulletHits(model);
         fireEnemyBullets(model);
         spawnBomb(model);
         CollisionService.CollisionResult result = collisionService.resolve(model);
         switch (result) {
-            case PLAYER_HIT: damagePlayer(model, Math.min(70, 40 + model.getWave() / 3)); break;
+            case PLAYER_HIT:
+                damagePlayer(model, scaledDamage(model, Math.min(70, 40 + model.getWave() / 3)));
+                break;
             case BOMB_HIT: explodeBomb(model); break;
             case EXTRA_LIFE: player.addLife(); soundPlayer.accept(SoundType.POWER_UP); break;
             case WEAPON_POWER_UP: player.increaseWeaponLevel(); soundPlayer.accept(SoundType.POWER_UP); break;
@@ -113,7 +118,9 @@ public final class GameService {
     }
 
     private void fireEnemyBullets(GameModel model) {
-        double chance = Math.min(0.012, 0.0025 + model.getWave() * 0.0007);
+        DifficultyLevel difficulty = model.getDifficultyLevel();
+        double chance = Math.min(0.012,
+                (0.0025 + model.getWave() * 0.0007) * difficulty.getEnemyFireMultiplier());
         for (Enemy enemy : model.getEnemies()) {
             if (Math.random() < chance) {
                 model.getBullets().add(factory.createEnemyBullet((int) enemy.getX() + Enemy.WIDTH / 2,
@@ -123,11 +130,19 @@ public final class GameService {
     }
 
     private void spawnBomb(GameModel model) {
-        double chance = Math.min(0.0012, 0.0002 + model.getWave() * 0.00008);
+        DifficultyLevel difficulty = model.getDifficultyLevel();
+        double chance = Math.min(0.012,
+                (0.0002 + model.getWave() * 0.00008) * difficulty.getBombChanceMultiplier());
         if (Math.random() < chance) {
             model.getBombs().add(factory.createBomb(30 + (int) (Math.random() * 740), -30,
-                    3 + Math.min(3, model.getWave() / 5)));
+                    (int) Math.round((3 + Math.min(3, model.getWave() / 5))
+                            * difficulty.getBombSpeedMultiplier())));
         }
+    }
+
+    private int scaledDamage(GameModel model, int baseDamage) {
+        return Math.max(1, (int) Math.round(baseDamage
+                * model.getDifficultyLevel().getDamageMultiplier()));
     }
 
     private void damagePlayer(GameModel model, int damage) {

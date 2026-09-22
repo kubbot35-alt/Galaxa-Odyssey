@@ -2,6 +2,7 @@ package org.example.view;
 
 import org.example.model.*;
 import org.example.model.enums.PowerUpType;
+import org.example.model.enums.DifficultyLevel;
 
 import java.awt.*;
 
@@ -26,6 +27,7 @@ public final class GameRenderer {
         }
         switch (model.getGameState()) {
             case MENU: menuRenderer.render(g, model); break;
+            case DIFFICULTY_SELECTION: difficultySelection(g, model); break;
             case PLAYING: drawGame(g, model); break;
             case PAUSED: drawGame(g, model); overlay(g, "PAUSED", "ESC  -  RESUME", "ENTER  -  RETURN TO MENU"); break;
             case GAMEOVER: gameOver(g, model); break;
@@ -121,6 +123,34 @@ public final class GameRenderer {
         card(g, 205, "AUDIO OUTPUT", "Sound effects and menu music", m.isSoundEnabled() ? "ONLINE" : "MUTED", new Color(55, 245, 255), m.getSettingsSelection() == 0);
         card(g, 275, "PARTICLE FX", "Explosions and visual effects", m.isParticlesEnabled() ? "ONLINE" : "REDUCED", new Color(175, 125, 255), m.getSettingsSelection() == 1);
         card(g, 345, "RETURN TO HANGAR", "Back to main menu", "EXIT", new Color(255, 95, 180), m.getSettingsSelection() == 2);
+    }
+
+    private void difficultySelection(Graphics2D g, GameModel model) {
+        header(g, "SELECT DIFFICULTY", "CHOOSE YOUR MISSION PROFILE", new Color(55, 245, 255));
+        DifficultyLevel[] levels = DifficultyLevel.values();
+        for (int i = 0; i < levels.length; i++) {
+            DifficultyLevel level = levels[i];
+            int y = 190 + i * 78;
+            boolean selected = model.getDifficultySelection() == i;
+            Color accent = i == 0
+                    ? new Color(100, 255, 180)
+                    : i == 1 ? new Color(55, 245, 255) : new Color(255, 95, 180);
+            card(g, y, level.getDisplayName(), difficultyDescription(level),
+                    selected ? "SELECTED" : "", accent, selected);
+        }
+        g.setColor(new Color(120, 170, 200, 150));
+        g.setFont(new Font("Monospaced", Font.BOLD, 11));
+        g.drawString("UP / DOWN  SELECT", 34, 535);
+        MenuRenderer.centered(g, "ENTER  CONFIRM", 400, 535);
+        g.drawString("ESC  BACK", 650, 535);
+    }
+
+    private String difficultyDescription(DifficultyLevel level) {
+        switch (level) {
+            case EASY: return "Fewer enemies and slower attacks";
+            case HARD: return "More enemies and dangerous attacks";
+            default: return "Balanced mission parameters";
+        }
     }
 
     private void howToPlay(Graphics2D g) {

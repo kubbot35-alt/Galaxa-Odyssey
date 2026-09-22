@@ -25,6 +25,11 @@ public final class InputController extends MouseAdapter implements KeyListener {
             if (code == KeyEvent.VK_UP || code == KeyEvent.VK_W) controller.selectMenu(-1);
             else if (code == KeyEvent.VK_DOWN || code == KeyEvent.VK_S) controller.selectMenu(1);
             else if (code == KeyEvent.VK_ENTER) controller.activateMenu();
+        } else if (state == GameState.DIFFICULTY_SELECTION) {
+            if (code == KeyEvent.VK_UP || code == KeyEvent.VK_W) controller.selectDifficulty(-1);
+            else if (code == KeyEvent.VK_DOWN || code == KeyEvent.VK_S) controller.selectDifficulty(1);
+            else if (code == KeyEvent.VK_ENTER) controller.activateDifficulty();
+            else if (code == KeyEvent.VK_ESCAPE) controller.cancelDifficultySelection();
         } else if (state == GameState.SETTINGS) {
             if (code == KeyEvent.VK_UP || code == KeyEvent.VK_W) controller.selectSettings(-1);
             else if (code == KeyEvent.VK_DOWN || code == KeyEvent.VK_S) controller.selectSettings(1);
@@ -64,6 +69,15 @@ public final class InputController extends MouseAdapter implements KeyListener {
             for (int i = 0; i < 4; i++) {
                 if (new java.awt.Rectangle(150, 240 + i * 78, 500, 62).contains(point)) {
                     model.setMenuSelection(i); controller.activateMenu(); return;
+                }
+            }
+        } else if (event.getButton() == MouseEvent.BUTTON1
+                && model.getGameState() == GameState.DIFFICULTY_SELECTION) {
+            for (int i = 0; i < 3; i++) {
+                if (new java.awt.Rectangle(170, 190 + i * 78, 460, 60).contains(point)) {
+                    model.setDifficultySelection(i);
+                    controller.activateDifficulty();
+                    return;
                 }
             }
         } else if (event.getButton() == MouseEvent.BUTTON1 && model.getGameState() == GameState.HOW_TO_PLAY) {

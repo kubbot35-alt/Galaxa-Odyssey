@@ -6,6 +6,7 @@ Galaxa Odyssey to futurystyczna gra typu arcade space shooter napisana w Javie z
 
 - futurystyczne menu główne z grafikami ładowanymi z `src/main/resources`,
 - tryby `PLAY`, `UPGRADES`, `SETTINGS` i `HOW TO PLAY`,
+- wybór poziomu trudności `EASY`, `NORMAL` lub `HARD` przed rozpoczęciem misji,
 - kolejne fale przeciwników o rosnącym poziomie trudności,
 - automatyczny ogień po przytrzymaniu klawisza `SPACE`,
 - różne typy przeciwników i pociski przeciwników,
@@ -62,6 +63,11 @@ java -cp target/classes org.example.Main
 | `ENTER` | zatwierdzenie wyboru; w pauzie zapis i powrót do menu |
 
 W menu można również korzystać z myszy.
+
+Po wybraniu `PLAY` pojawia się ekran poziomu trudności. Poziom można wybrać
+klawiszami `UP` / `DOWN` lub kliknięciem myszy, zatwierdzić klawiszem `ENTER`
+albo kliknięciem, a anulować klawiszem `ESC`. Poziom wpływa na liczbę i
+szybkość przeciwników, częstotliwość ich ognia, obrażenia oraz bomby.
 
 ## Struktura projektu
 
