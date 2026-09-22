@@ -1,12 +1,12 @@
-package org.example.model;
+package org.example;
 
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 
-public class Bullet {
-    public int x, y, speed = 12;
-    public boolean fromPlayer;
+class Bullet {
+    int x, y, speed = 12;
+    boolean fromPlayer;
 
     public Bullet(int x, int y, boolean fromPlayer) {
         this.x = x;

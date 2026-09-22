@@ -1,12 +1,12 @@
-package org.example.model;
+package org.example;
 
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 
-public class PowerUp {
-    public int x, y, width = 22, height = 22;
-    public int type;
+class PowerUp {
+    int x, y, width = 22, height = 22;
+    int type;
 
     public PowerUp(int x, int y, int type) {
         this.x = x;
