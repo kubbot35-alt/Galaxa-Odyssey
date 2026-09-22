@@ -24,6 +24,12 @@ Galaxa Odyssey to futurystyczna gra typu arcade space shooter napisana w Javie z
 
 Projekt jest skonfigurowany do kompilacji z użyciem Java 8.
 
+Stan gry zapisuje się automatycznie przy wejściu w pauzę. Zapisywane są
+życia, poziom broni, punkty, etap, kredyty i odblokowane ulepszenia. Wybranie
+`PLAY` z menu wczytuje zapisany stan, jeśli istnieje. Plik zapisu znajduje się
+w pliku `out/save.json` w katalogu projektu. Stan jest
+również zapisywany przy zamknięciu okna gry.
+
 ## Uruchomienie
 
 ### Maven
@@ -51,10 +57,9 @@ java -cp target/classes org.example.Main
 | `A` / `D` | ruch statku w lewo i w prawo |
 | `←` / `→` | ruch statku w lewo i w prawo |
 | `SPACE` | strzelanie; przytrzymanie włącza ogień ciągły |
-| `P` | pauza podczas misji |
-| `ESC` | pauza podczas misji |
+| `ESC` | pauza; w pauzie powrót do gry |
 | `↑` / `↓` | wybór pozycji w menu |
-| `ENTER` | zatwierdzenie wyboru |
+| `ENTER` | zatwierdzenie wyboru; w pauzie zapis i powrót do menu |
 
 W menu można również korzystać z myszy.
 

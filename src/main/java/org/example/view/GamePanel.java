@@ -11,8 +11,10 @@ import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Iterator;
+import org.example.controller.GameSaveController;
 import org.example.model.Bullet;
 import org.example.model.Enemy;
+import org.example.model.GameSave;
 import org.example.model.GameState;
 import org.example.model.Particle;
 import org.example.model.Player;
@@ -21,6 +23,7 @@ import org.example.model.Star;
 
 class GamePanel extends JPanel implements ActionListener, KeyListener {
     private final Timer timer;
+    private final GameSaveController saveController = new GameSaveController();
     private GameState gameState = GameState.MENU;
 
     private Player player;
@@ -89,22 +92,94 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
             stars.add(new Star(800, 600));
         }
 
+        loadProfileState();
         SoundEffects.startMenuMusic();
         timer = new Timer(16, this);
         timer.start();
     }
 
+    private void loadProfileState() {
+        GameSave savedGame = saveController.load();
+        if (savedGame != null) {
+            highScore = savedGame.getScore();
+            credits = savedGame.getCredits();
+            ownedWeaponLevel = savedGame.getOwnedWeaponLevel();
+        }
+    }
+
     private void initGame() {
-        player = new Player(380, 520);
-        player.weaponLevel = startingWeaponLevel();
+        GameSave savedGame = saveController.load();
+        if (savedGame == null) {
+            player = new Player(380, 520);
+            player.weaponLevel = startingWeaponLevel();
+            waveCount = 0;
+        } else {
+            player = new Player(380, 520);
+            player.lives = savedGame.getLives();
+            player.weaponLevel = savedGame.getWeaponLevel();
+            player.score = savedGame.getScore();
+            highScore = Math.max(highScore, savedGame.getScore());
+            waveCount = Math.max(0, savedGame.getStage() - 1);
+            credits = savedGame.getCredits();
+            ownedWeaponLevel = savedGame.getOwnedWeaponLevel();
+        }
         bullets.clear();
         enemies.clear();
         powerUps.clear();
         particles.clear();
-        waveCount = 0;
         spaceHeld = false;
         fireCooldown = 0;
         spawnNextWave();
+    }
+
+    private void saveGame() {
+        if (player == null) {
+            return;
+        }
+        GameSave save = new GameSave(
+                player.lives,
+                player.weaponLevel,
+                player.score,
+                waveCount,
+                credits,
+                ownedWeaponLevel
+        );
+        saveController.save(save);
+    }
+
+    public void saveGameOnExit() {
+        if (player != null) {
+            saveGame();
+        }
+        timer.stop();
+    }
+
+    private void pauseGame() {
+        if (gameState != GameState.PLAYING) {
+            return;
+        }
+        spaceHeld = false;
+        player.left = false;
+        player.right = false;
+        saveGame();
+        gameState = GameState.PAUSED;
+    }
+
+    private void resumeGame() {
+        if (gameState == GameState.PAUSED) {
+            gameState = GameState.PLAYING;
+        }
+    }
+
+    private void returnToMenuFromPause() {
+        if (gameState != GameState.PAUSED) {
+            return;
+        }
+        spaceHeld = false;
+        player.left = false;
+        player.right = false;
+        gameState = GameState.MENU;
+        SoundEffects.startMenuMusic();
     }
 
     private void spawnNextWave() {
@@ -122,11 +197,10 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
 
     @Override
     public void actionPerformed(ActionEvent e) {
-        for (Star star : stars) {
-            star.update(600);
-        }
-
         if (gameState == GameState.PLAYING) {
+            for (Star star : stars) {
+                star.update(600);
+            }
             player.update(800);
             if (fireCooldown > 0) {
                 fireCooldown--;
@@ -223,7 +297,7 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
             }
         }
 
-        if (particlesEnabled) {
+        if (gameState == GameState.PLAYING && particlesEnabled) {
             Iterator<Particle> partIter = particles.iterator();
             while (partIter.hasNext()) {
                 Particle p = partIter.next();
@@ -309,6 +383,10 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
                 break;
             case PLAYING:
                 drawGame(g2d);
+                break;
+            case PAUSED:
+                drawGame(g2d);
+                drawPause(g2d);
                 break;
             case GAMEOVER:
                 drawGameOver(g2d);
@@ -589,6 +667,21 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
         drawCenteredString(g2d, "PRESS ENTER TO RETURN TO MENU", getWidth() / 2, 430);
     }
 
+    private void drawPause(Graphics2D g2d) {
+        g2d.setColor(new Color(2, 5, 25, 185));
+        g2d.fillRect(0, 0, getWidth(), getHeight());
+        g2d.setColor(new Color(110, 235, 255));
+        g2d.setFont(new Font("SansSerif", Font.BOLD, 52));
+        drawCenteredString(g2d, "PAUSED", getWidth() / 2, 225);
+        g2d.setColor(Color.WHITE);
+        g2d.setFont(new Font("SansSerif", Font.PLAIN, 21));
+        drawCenteredString(g2d, "ESC  -  RESUME", getWidth() / 2, 315);
+        drawCenteredString(g2d, "ENTER  -  RETURN TO MENU", getWidth() / 2, 355);
+        g2d.setFont(new Font("SansSerif", Font.PLAIN, 14));
+        g2d.setColor(new Color(170, 210, 230));
+        drawCenteredString(g2d, "GAME STATE SAVED", getWidth() / 2, 410);
+    }
+
     @Override
     public void keyPressed(KeyEvent e) {
         int code = e.getKeyCode();
@@ -633,6 +726,10 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
                 SoundEffects.startMenuMusic();
             }
         } else if (gameState == GameState.PLAYING) {
+            if (code == KeyEvent.VK_ESCAPE) {
+                pauseGame();
+                return;
+            }
             if (code == KeyEvent.VK_LEFT || code == KeyEvent.VK_A) player.left = true;
             if (code == KeyEvent.VK_RIGHT || code == KeyEvent.VK_D) player.right = true;
 
@@ -641,6 +738,12 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
                 if (fireCooldown == 0) {
                     firePlayerWeapon();
                 }
+            }
+        } else if (gameState == GameState.PAUSED) {
+            if (code == KeyEvent.VK_ESCAPE) {
+                resumeGame();
+            } else if (code == KeyEvent.VK_ENTER) {
+                returnToMenuFromPause();
             }
         } else if (gameState == GameState.GAMEOVER) {
             if (code == KeyEvent.VK_ENTER) {
