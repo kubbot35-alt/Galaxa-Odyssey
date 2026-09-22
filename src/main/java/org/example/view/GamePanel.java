@@ -12,6 +12,7 @@ import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Iterator;
 import org.example.controller.GameSaveController;
+import org.example.model.Bomb;
 import org.example.model.Bullet;
 import org.example.model.Enemy;
 import org.example.model.GameSave;
@@ -28,6 +29,7 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
 
     private Player player;
     private final ArrayList<Bullet> bullets = new ArrayList<>();
+    private final ArrayList<Bomb> bombs = new ArrayList<>();
     private final ArrayList<Enemy> enemies = new ArrayList<>();
     private final ArrayList<PowerUp> powerUps = new ArrayList<>();
     private final ArrayList<Particle> particles = new ArrayList<>();
@@ -73,15 +75,27 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
                     SoundEffects.startMenuMusic();
                 } else if (gameState == GameState.UPGRADES
                         && event.getButton() == MouseEvent.BUTTON1) {
-                    if (new Rectangle(170, 100, 460, 60).contains(event.getPoint())) {
+                    if (new Rectangle(170, 170, 460, 60).contains(event.getPoint())) {
                         upgradeSelection = 0;
                         activateUpgradeSelection();
-                    } else if (new Rectangle(170, 180, 460, 60).contains(event.getPoint())) {
+                    } else if (new Rectangle(170, 250, 460, 60).contains(event.getPoint())) {
                         upgradeSelection = 1;
                         activateUpgradeSelection();
-                    } else if (new Rectangle(170, 260, 460, 60).contains(event.getPoint())) {
+                    } else if (new Rectangle(170, 330, 460, 60).contains(event.getPoint())) {
                         upgradeSelection = 2;
                         activateUpgradeSelection();
+                    }
+                } else if (gameState == GameState.SETTINGS
+                        && event.getButton() == MouseEvent.BUTTON1) {
+                    if (new Rectangle(145, 205, 510, 52).contains(event.getPoint())) {
+                        settingsSelection = 0;
+                        activateSettingsSelection();
+                    } else if (new Rectangle(145, 275, 510, 52).contains(event.getPoint())) {
+                        settingsSelection = 1;
+                        activateSettingsSelection();
+                    } else if (new Rectangle(145, 345, 510, 52).contains(event.getPoint())) {
+                        settingsSelection = 2;
+                        activateSettingsSelection();
                     }
                 }
                 requestFocusInWindow();
@@ -124,6 +138,7 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
             ownedWeaponLevel = savedGame.getOwnedWeaponLevel();
         }
         bullets.clear();
+        bombs.clear();
         enemies.clear();
         powerUps.clear();
         particles.clear();
@@ -224,7 +239,7 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
                 en.update(waveCount);
 
                 if (en.getBounds().intersects(player.getBounds())) {
-                    damagePlayer(35);
+                    damagePlayer(Math.min(70, 40 + waveCount / 3));
                     eIter.remove();
                     continue;
                 }
@@ -239,7 +254,7 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
                 Bullet bullet = enemyBulletIterator.next();
                 if (!bullet.fromPlayer && bullet.getBounds().intersects(player.getBounds())) {
                     enemyBulletIterator.remove();
-                    damagePlayer(20);
+                    damagePlayer(Math.min(45, 25 + waveCount / 4));
                 }
             }
 
@@ -247,6 +262,17 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
             while (bIter.hasNext()) {
                 Bullet b = bIter.next();
                 if (b.fromPlayer) {
+                    Iterator<Bomb> bombIterator = bombs.iterator();
+                    while (bombIterator.hasNext()) {
+                        Bomb bomb = bombIterator.next();
+                        if (b.getBounds().intersects(bomb.getBounds())) {
+                            bIter.remove();
+                            bombIterator.remove();
+                            explodeBomb(bomb);
+                            return;
+                        }
+                    }
+
                     Iterator<Enemy> innerEIter = enemies.iterator();
                     while (innerEIter.hasNext()) {
                         Enemy en = innerEIter.next();
@@ -257,7 +283,7 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
                             credits += en.type == 2 ? 15 : 10;
                             highScore = Math.max(highScore, player.score);
 
-                            if (Math.random() < 0.15) {
+                            if (Math.random() < 0.08) {
                                 powerUps.add(new PowerUp((int) en.x, (int) en.y, Math.random() < 0.5 ? 1 : 2));
                             }
 
@@ -270,8 +296,29 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
             }
 
             for (Enemy en : enemies) {
-                if (Math.random() < 0.0015 + (waveCount * 0.0005)) {
+                double firingChance = Math.min(0.012, 0.0025 + waveCount * 0.0007);
+                if (Math.random() < firingChance) {
                     bullets.add(new Bullet((int) en.x + en.width / 2, (int) en.y + en.height, false));
+                }
+            }
+
+            double bombChance = Math.min(0.0012, 0.0002 + waveCount * 0.00008);
+            if (Math.random() < bombChance) {
+                bombs.add(new Bomb(30 + (int) (Math.random() * 740), -30,
+                        3 + Math.min(3, waveCount / 5)));
+            }
+
+            Iterator<Bomb> bombIterator = bombs.iterator();
+            while (bombIterator.hasNext()) {
+                Bomb bomb = bombIterator.next();
+                bomb.update();
+                if (bomb.getBounds().intersects(player.getBounds())) {
+                    bombIterator.remove();
+                    explodeBomb(bomb);
+                    return;
+                }
+                if (bomb.y > getHeight()) {
+                    bombIterator.remove();
                 }
             }
 
@@ -344,9 +391,20 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
             createExplosion(player.x + 20, player.y + 20, new Color(80, 210, 255), 32);
             SoundEffects.playSound("explosion");
             if (player.lives <= 0) {
+                saveController.deleteSave();
                 gameState = GameState.GAMEOVER;
             }
         }
+    }
+
+    private void explodeBomb(Bomb bomb) {
+        createExplosion(bomb.x + 12, bomb.y + 12, new Color(255, 70, 80), 45);
+        SoundEffects.playSound("explosion");
+        saveController.deleteSave();
+        spaceHeld = false;
+        player.left = false;
+        player.right = false;
+        gameState = GameState.GAMEOVER;
     }
 
     @Override
@@ -512,42 +570,100 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
 
     private void drawUpgrades(Graphics2D g2d) {
         drawModernSpaceBackground(g2d);
-        g2d.setColor(new Color(110, 235, 255));
-        g2d.setFont(new Font("SansSerif", Font.BOLD, 38));
-        drawCenteredString(g2d, "SHIP UPGRADES", getWidth() / 2, 92);
-        g2d.setFont(new Font("SansSerif", Font.BOLD, 16));
-        g2d.setColor(new Color(180, 225, 245));
-        drawCenteredString(g2d, "CREDITS  " + credits, getWidth() / 2, 124);
+        drawScreenHeader(g2d, "SHIP UPGRADES", "REINFORCE YOUR ARSENAL", new Color(175, 125, 255));
+        drawCreditsBadge(g2d);
 
-        drawUpgradeCard(g2d, 0, "DUAL CANNONS", "Fire two projectiles", 100, 2, 120);
-        drawUpgradeCard(g2d, 1, "TRIPLE CANNONS", "Fire three projectiles", 180, 3, 260);
-        drawUpgradeCard(g2d, 2, "RETURN TO HANGAR", "Back to main menu", 260, 0, 0);
+        drawUpgradeCard(g2d, 0, "DUAL CANNONS", "Fire two projectiles", 170, 2, 120);
+        drawUpgradeCard(g2d, 1, "TRIPLE CANNONS", "Fire three projectiles", 250, 3, 260);
+        drawUpgradeCard(g2d, 2, "RETURN TO HANGAR", "Back to main menu", 330, 0, 0);
 
-        g2d.setFont(new Font("SansSerif", Font.PLAIN, 14));
-        g2d.setColor(new Color(170, 210, 230));
-        drawCenteredString(g2d, "UP / DOWN: SELECT     ENTER: CONFIRM     ESC: BACK", getWidth() / 2, 430);
+        drawFooterHint(g2d, "UP / DOWN  SELECT", "ENTER  CONFIRM", "ESC  BACK");
     }
 
     private void drawUpgradeCard(Graphics2D g2d, int index, String title, String subtitle,
                                  int y, int level, int cost) {
         boolean selected = upgradeSelection == index;
         Color accent = index == 2 ? new Color(255, 95, 180) : new Color(120, 190, 255);
-        g2d.setColor(selected ? new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 150)
-                : new Color(8, 18, 45, 220));
-        g2d.fillRoundRect(170, y, 460, 60, 16, 16);
-        g2d.setColor(new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 190));
-        g2d.drawRoundRect(170, y, 460, 60, 16, 16);
-        g2d.setColor(Color.WHITE);
+        drawCard(g2d, 170, y, 460, 60, accent, selected);
+        g2d.setColor(selected ? Color.WHITE : new Color(220, 235, 250));
         g2d.setFont(new Font("SansSerif", Font.BOLD, 17));
         g2d.drawString(title, 195, y + 25);
+        g2d.setColor(new Color(165, 195, 220));
         g2d.setFont(new Font("SansSerif", Font.PLAIN, 13));
         g2d.drawString(subtitle, 195, y + 45);
+        g2d.setFont(new Font("SansSerif", Font.BOLD, 13));
         if (cost > 0 && ownedWeaponLevel >= level) {
             g2d.setColor(new Color(100, 255, 180));
             g2d.drawString("OWNED", 535, y + 34);
         } else if (cost > 0) {
+            g2d.setColor(credits >= cost ? new Color(255, 220, 100) : new Color(255, 120, 140));
             g2d.drawString(cost + " CR", 535, y + 34);
+        } else {
+            g2d.setColor(accent);
+            g2d.drawString("EXIT", 548, y + 34);
         }
+    }
+
+    private void drawSettings(Graphics2D g2d) {
+        drawModernSpaceBackground(g2d);
+        drawScreenHeader(g2d, "SETTINGS", "SYSTEM CONFIGURATION", new Color(55, 245, 255));
+
+        drawSettingsCard(g2d, 0, "AUDIO OUTPUT", "Sound effects and menu music",
+                SoundEffects.isSoundEnabled() ? "ONLINE" : "MUTED", new Color(55, 245, 255), 205);
+        drawSettingsCard(g2d, 1, "PARTICLE FX", "Explosions and visual effects",
+                particlesEnabled ? "ONLINE" : "REDUCED", new Color(175, 125, 255), 275);
+        drawSettingsCard(g2d, 2, "RETURN TO HANGAR", "Back to main menu",
+                "EXIT", new Color(255, 95, 180), 345);
+
+        drawFooterHint(g2d, "UP / DOWN  SELECT", "ENTER  TOGGLE", "ESC  BACK");
+    }
+
+    private void drawSettingsCard(Graphics2D g2d, int index, String title, String subtitle,
+                                 String value, Color accent, int y) {
+        boolean selected = settingsSelection == index;
+        drawCard(g2d, 145, y, 510, 52, accent, selected);
+        g2d.setColor(selected ? Color.WHITE : new Color(220, 235, 250));
+        g2d.setFont(new Font("SansSerif", Font.BOLD, 15));
+        g2d.drawString(title, 175, y + 22);
+        g2d.setColor(new Color(155, 190, 215));
+        g2d.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        g2d.drawString(subtitle, 175, y + 39);
+        g2d.setColor(selected ? accent : new Color(185, 220, 235));
+        g2d.setFont(new Font("Monospaced", Font.BOLD, 13));
+        g2d.drawString(value, 535, y + 30);
+    }
+
+    private void drawScreenHeader(Graphics2D g2d, String title, String subtitle, Color accent) {
+        g2d.setColor(new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 35));
+        g2d.fillOval(120, 20, 560, 105);
+        g2d.setColor(accent);
+        g2d.setFont(new Font("SansSerif", Font.BOLD, 38));
+        drawCenteredString(g2d, title, getWidth() / 2, 78);
+        g2d.setColor(new Color(180, 220, 240));
+        g2d.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        drawCenteredString(g2d, subtitle, getWidth() / 2, 103);
+    }
+
+    private void drawCreditsBadge(Graphics2D g2d) {
+        g2d.setColor(new Color(5, 18, 48, 230));
+        g2d.fillRoundRect(300, 125, 200, 30, 15, 15);
+        g2d.setColor(new Color(255, 220, 100, 180));
+        g2d.drawRoundRect(300, 125, 200, 30, 15, 15);
+        g2d.setColor(new Color(255, 235, 150));
+        g2d.setFont(new Font("Monospaced", Font.BOLD, 14));
+        drawCenteredString(g2d, "CREDITS  " + credits, getWidth() / 2, 145);
+    }
+
+    private void drawCard(Graphics2D g2d, int x, int y, int width, int height,
+                          Color accent, boolean selected) {
+        g2d.setColor(selected
+                ? new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 105)
+                : new Color(5, 16, 43, 225));
+        g2d.fillRoundRect(x, y, width, height, 16, 16);
+        g2d.setColor(new Color(accent.getRed(), accent.getGreen(), accent.getBlue(),
+                selected ? 240 : 145));
+        g2d.setStroke(new BasicStroke(selected ? 2.5f : 1.2f));
+        g2d.drawRoundRect(x, y, width, height, 16, 16);
     }
 
     private void activateUpgradeSelection() {
@@ -565,53 +681,55 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
         }
     }
 
+    private void activateSettingsSelection() {
+        if (settingsSelection == 0) {
+            SoundEffects.setSoundEnabled(!SoundEffects.isSoundEnabled());
+        } else if (settingsSelection == 1) {
+            particlesEnabled = !particlesEnabled;
+        } else if (settingsSelection == 2) {
+            gameState = GameState.MENU;
+            SoundEffects.startMenuMusic();
+        }
+    }
+
     private void drawCenteredString(Graphics2D g2d, String text, int centerX, int baselineY) {
         FontMetrics metrics = g2d.getFontMetrics();
         g2d.drawString(text, centerX - metrics.stringWidth(text) / 2, baselineY);
     }
 
-    private void drawSettings(Graphics2D g2d) {
+    private void drawHowToPlay(Graphics2D g2d) {
         drawModernSpaceBackground(g2d);
-        g2d.setColor(new Color(110, 235, 255));
-        g2d.setFont(new Font("SansSerif", Font.BOLD, 42));
-        drawCenteredString(g2d, "SETTINGS", getWidth() / 2, 150);
-
-        g2d.setFont(new Font("SansSerif", Font.BOLD, 22));
-        String soundStatus = SoundEffects.isSoundEnabled() ? "[ ON ]" : "[ OFF ]";
-        String partStatus = particlesEnabled ? "[ ON ]" : "[ OFF ]";
-
-        String[] options = {
-                "Sound Effects: " + soundStatus,
-                "Particle FX:   " + partStatus,
-                "BACK TO MENU"
-        };
-
-        for (int i = 0; i < options.length; i++) {
-            if (i == settingsSelection) {
-                g2d.setColor(Color.YELLOW);
-                g2d.drawString("> " + options[i], 220, 260 + i * 50);
-            } else {
-                g2d.setColor(Color.WHITE);
-                g2d.drawString(options[i], 240, 260 + i * 50);
-            }
-        }
+        drawScreenHeader(g2d, "HOW TO PLAY", "MISSION CONTROL // FLIGHT MANUAL", new Color(255, 95, 180));
+        drawControlCard(g2d, 0, "MOVE SHIP", "A / D", "or LEFT / RIGHT", 155, new Color(55, 245, 255));
+        drawControlCard(g2d, 1, "FIRE WEAPONS", "SPACE", "hold for continuous fire", 225, new Color(175, 125, 255));
+        drawControlCard(g2d, 2, "PAUSE MISSION", "ESC", "ESC resumes / ENTER returns", 295, new Color(255, 95, 180));
+        drawControlCard(g2d, 3, "MENU ACTION", "ENTER", "confirm selected option", 365, new Color(255, 220, 100));
+        drawFooterHint(g2d, "SURVIVE THE WAVES", "DESTROY BOMBS", "ESC  BACK");
     }
 
-    private void drawHowToPlay(Graphics2D g2d) {
-        drawMenuBackground(g2d);
-        g2d.setColor(new Color(85, 235, 255));
-        g2d.setFont(new Font("SansSerif", Font.BOLD, 38));
-        drawCenteredString(g2d, "HOW TO PLAY", getWidth() / 2, 130);
+    private void drawControlCard(Graphics2D g2d, int index, String title, String key,
+                                 String description, int y, Color accent) {
+        drawCard(g2d, 145, y, 510, 52, accent, false);
+        g2d.setColor(accent);
+        g2d.setFont(new Font("SansSerif", Font.BOLD, 15));
+        g2d.drawString(title, 175, y + 22);
+        g2d.setColor(new Color(170, 205, 225));
+        g2d.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        g2d.drawString(description, 175, y + 40);
+        g2d.setColor(new Color(5, 18, 48, 240));
+        g2d.fillRoundRect(515, y + 10, 115, 30, 10, 10);
+        g2d.setColor(accent);
+        g2d.drawRoundRect(515, y + 10, 115, 30, 10, 10);
+        g2d.setFont(new Font("Monospaced", Font.BOLD, 13));
+        drawCenteredString(g2d, key, 572, y + 30);
+    }
 
-        g2d.setColor(Color.WHITE);
-        g2d.setFont(new Font("SansSerif", Font.PLAIN, 20));
-        drawCenteredString(g2d, "A / LEFT and D / RIGHT  - MOVE", getWidth() / 2, 230);
-        drawCenteredString(g2d, "SPACE                   - FIRE", getWidth() / 2, 275);
-        drawCenteredString(g2d, "ENTER                   - SELECT", getWidth() / 2, 320);
-
-        g2d.setColor(new Color(235, 80, 170));
-        g2d.setFont(new Font("Monospaced", Font.BOLD, 18));
-        drawCenteredString(g2d, "PRESS ENTER TO RETURN", getWidth() / 2, 470);
+    private void drawFooterHint(Graphics2D g2d, String left, String center, String right) {
+        g2d.setColor(new Color(120, 170, 200, 150));
+        g2d.setFont(new Font("Monospaced", Font.BOLD, 11));
+        g2d.drawString(left, 34, 535);
+        drawCenteredString(g2d, center, getWidth() / 2, 535);
+        g2d.drawString(right, 620, 535);
     }
 
     private void drawGame(Graphics2D g2d) {
@@ -619,6 +737,10 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
 
         for (Bullet b : bullets) {
             b.draw(g2d);
+        }
+
+        for (Bomb bomb : bombs) {
+            bomb.draw(g2d);
         }
 
         for (Enemy en : enemies) {
@@ -700,14 +822,10 @@ class GamePanel extends JPanel implements ActionListener, KeyListener {
             } else if (code == KeyEvent.VK_DOWN || code == KeyEvent.VK_S) {
                 settingsSelection = (settingsSelection + 1) % 3;
             } else if (code == KeyEvent.VK_ENTER) {
-                if (settingsSelection == 0) {
-                    SoundEffects.setSoundEnabled(!SoundEffects.isSoundEnabled());
-                } else if (settingsSelection == 1) {
-                    particlesEnabled = !particlesEnabled;
-                } else if (settingsSelection == 2) {
-                    gameState = GameState.MENU;
-                    SoundEffects.startMenuMusic();
-                }
+                activateSettingsSelection();
+            } else if (code == KeyEvent.VK_ESCAPE) {
+                gameState = GameState.MENU;
+                SoundEffects.startMenuMusic();
             }
         } else if (gameState == GameState.UPGRADES) {
             if (code == KeyEvent.VK_UP || code == KeyEvent.VK_W) {

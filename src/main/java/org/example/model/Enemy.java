@@ -25,20 +25,20 @@ public class Enemy {
         angle += 0.04;
         x = startX + Math.sin(angle) * (42 + wave * 2);
 
-        if (!diving && Math.random() < 0.0007 + wave * 0.00015) {
+        if (!diving && Math.random() < 0.001 + wave * 0.0003) {
             diving = true;
         }
 
         if (diving) {
-            y += 2.2 + type * 0.5;
-            x += Math.sin(angle * 2.5) * 1.8;
+            y += 2.6 + type * 0.6 + Math.min(1.5, wave * 0.08);
+            x += Math.sin(angle * 2.5) * (1.8 + Math.min(1.2, wave * 0.05));
             if (y > 620) {
                 y = startY;
                 x = startX;
                 diving = false;
             }
         } else {
-            y += Math.min(0.08, 0.02 + wave * 0.003);
+            y += Math.min(0.14, 0.025 + wave * 0.004);
         }
     }
 
