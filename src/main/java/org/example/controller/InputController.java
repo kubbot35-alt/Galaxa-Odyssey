@@ -83,7 +83,7 @@ public final class InputController extends MouseAdapter implements KeyListener {
         } else if (event.getButton() == MouseEvent.BUTTON1 && model.getGameState() == GameState.HOW_TO_PLAY) {
             controller.returnToMenu();
         } else if (event.getButton() == MouseEvent.BUTTON1 && model.getGameState() == GameState.UPGRADES) {
-            for (int i = 0; i < 3; i++) if (new java.awt.Rectangle(170, 170 + i * 80, 460, 60).contains(point)) {
+            for (int i = 0; i < 5; i++) if (new java.awt.Rectangle(145, 170 + i * 65, 510, 52).contains(point)) {
                 model.setUpgradeSelection(i); controller.activateUpgrade(); return;
             }
         } else if (event.getButton() == MouseEvent.BUTTON1 && model.getGameState() == GameState.SETTINGS) {

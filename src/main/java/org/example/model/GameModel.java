@@ -21,8 +21,11 @@ public final class GameModel {
     private final List<Star> stars = new ArrayList<Star>();
     private int wave;
     private int credits;
+    private int profileScore;
     private int highScore;
     private int ownedWeaponLevel = 1;
+    private boolean doubleLives;
+    private boolean infiniteLives;
     private boolean particlesEnabled = true;
     private boolean soundEnabled = true;
     private boolean spaceHeld;
@@ -54,10 +57,19 @@ public final class GameModel {
     public void setWave(int value) { wave = value; }
     public int getCredits() { return credits; }
     public void setCredits(int value) { credits = value; }
+    public int getProfileScore() { return profileScore; }
+    public void setProfileScore(int value) { profileScore = Math.max(0, value); }
     public int getHighScore() { return highScore; }
     public void setHighScore(int value) { highScore = value; }
     public int getOwnedWeaponLevel() { return ownedWeaponLevel; }
     public void setOwnedWeaponLevel(int value) { ownedWeaponLevel = Math.max(1, Math.min(3, value)); }
+    public boolean hasDoubleLives() { return doubleLives; }
+    public void setDoubleLives(boolean value) { doubleLives = value; }
+    public boolean hasInfiniteLives() { return infiniteLives; }
+    public void setInfiniteLives(boolean value) {
+        infiniteLives = value;
+        if (value) doubleLives = true;
+    }
     public boolean isParticlesEnabled() { return particlesEnabled; }
     public void setParticlesEnabled(boolean value) { particlesEnabled = value; }
     public boolean isSoundEnabled() { return soundEnabled; }

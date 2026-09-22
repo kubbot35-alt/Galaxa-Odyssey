@@ -54,6 +54,7 @@ public final class Player {
     public void addLife() { lives++; }
     public void loseLife() { lives--; }
     public void setLives(int value) { lives = value; }
+    public void doubleLives() { lives *= 2; }
     public void resetShield() { shield = 100; }
     public void reduceShield(int amount) { shield = Math.max(0, shield - amount); }
     public void setShield(int value) { shield = value; }

@@ -42,6 +42,7 @@ public final class GameService {
         for (Enemy enemy : model.getEnemies()) {
             enemy.update(model.getWave(), model.getDifficultyLevel());
         }
+        updatePowerUps(model);
 
         resolvePlayerBulletHits(model);
         fireEnemyBullets(model);
@@ -147,6 +148,10 @@ public final class GameService {
 
     private void damagePlayer(GameModel model, int damage) {
         Player player = model.getPlayer();
+        if (model.hasInfiniteLives()) {
+            player.resetShield();
+            return;
+        }
         if (player.getShield() > 0) {
             player.reduceShield(damage);
             return;
@@ -183,6 +188,17 @@ public final class GameService {
             org.example.model.Particle particle = iterator.next();
             particle.update();
             if (particle.getLife() <= 0) iterator.remove();
+        }
+    }
+
+    private void updatePowerUps(GameModel model) {
+        for (Iterator<org.example.model.PowerUp> iterator = model.getPowerUps().iterator();
+             iterator.hasNext();) {
+            org.example.model.PowerUp powerUp = iterator.next();
+            powerUp.update();
+            if (powerUp.getY() > GameModel.HEIGHT) {
+                iterator.remove();
+            }
         }
     }
 }

@@ -114,6 +114,9 @@ biznesowe zamiast bezpośredniej modyfikacji stanu.
 
 Projekt edukacyjny i demonstracyjny. Brak osobnej licencji komercyjnej.
 
+Ulepszenia profilu obejmuja rowniez podwojna liczbe zyc za 5000 punktow
+oraz nieskonczone zycia za 50000000 punktow. Zakupy sa zapisywane w profilu.
+
 ### Aktualny podzial odpowiedzialnosci
 
 `GameModel` przechowuje stan i encje domenowe bez zaleznosci od Swing lub

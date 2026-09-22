@@ -3,6 +3,7 @@ package org.example.view;
 import org.example.model.*;
 import org.example.model.enums.PowerUpType;
 import org.example.model.enums.DifficultyLevel;
+import org.example.model.enums.UpgradeOption;
 
 import java.awt.*;
 
@@ -112,10 +113,34 @@ public final class GameRenderer {
 
     private void upgrades(Graphics2D g, GameModel m) {
         header(g, "SHIP UPGRADES", "REINFORCE YOUR ARSENAL", new Color(175, 125, 255));
-        g.setColor(new Color(255, 235, 150)); g.setFont(new Font("Monospaced", Font.BOLD, 14)); MenuRenderer.centered(g, "CREDITS  " + m.getCredits(), 400, 145);
-        card(g, 170, "DUAL CANNONS", "Fire two projectiles", m.getOwnedWeaponLevel() >= 2 ? "OWNED" : "120 CR", new Color(120, 190, 255), m.getUpgradeSelection() == 0);
-        card(g, 250, "TRIPLE CANNONS", "Fire three projectiles", m.getOwnedWeaponLevel() >= 3 ? "OWNED" : "260 CR", new Color(120, 190, 255), m.getUpgradeSelection() == 1);
-        card(g, 330, "RETURN TO HANGAR", "Back to main menu", "EXIT", new Color(255, 95, 180), m.getUpgradeSelection() == 2);
+        g.setColor(new Color(255, 235, 150)); g.setFont(new Font("Monospaced", Font.BOLD, 14));
+        MenuRenderer.centered(g, "POINTS  " + m.getProfileScore(), 400, 145);
+        upgradeCard(g, m, UpgradeOption.DUAL_CANNONS, 170, "Fire two projectiles");
+        upgradeCard(g, m, UpgradeOption.TRIPLE_CANNONS, 235, "Fire three projectiles");
+        upgradeCard(g, m, UpgradeOption.DOUBLE_LIVES, 300, "Start missions with double lives");
+        upgradeCard(g, m, UpgradeOption.INFINITE_LIVES, 365, "Damage never removes lives");
+        card(g, 430, "RETURN TO HANGAR", "Back to main menu", "EXIT",
+                new Color(255, 95, 180), m.getUpgradeSelection() == UpgradeOption.RETURN.ordinal());
+    }
+
+    private void upgradeCard(Graphics2D g, GameModel model, UpgradeOption option,
+                             int y, String subtitle) {
+        boolean selected = model.getUpgradeSelection() == option.ordinal();
+        boolean owned = isUpgradeOwned(model, option);
+        Color accent = option == UpgradeOption.DOUBLE_LIVES
+                ? new Color(100, 255, 180) : new Color(120, 190, 255);
+        String value = owned ? "OWNED" : option.getCost() + " PTS";
+        card(g, y, option.getDisplayName(), subtitle, value, accent, selected);
+    }
+
+    private boolean isUpgradeOwned(GameModel model, UpgradeOption option) {
+        switch (option) {
+            case DUAL_CANNONS: return model.getOwnedWeaponLevel() >= 2;
+            case TRIPLE_CANNONS: return model.getOwnedWeaponLevel() >= 3;
+            case DOUBLE_LIVES: return model.hasDoubleLives();
+            case INFINITE_LIVES: return model.hasInfiniteLives();
+            default: return false;
+        }
     }
 
     private void settings(Graphics2D g, GameModel m) {

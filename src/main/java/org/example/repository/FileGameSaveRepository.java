@@ -14,6 +14,8 @@ public final class FileGameSaveRepository implements GameSaveRepository {
     private static final String SAVE_FILE_NAME = "save.json";
     private static final Pattern INTEGER_FIELD =
             Pattern.compile("\"([a-zA-Z]+)\"\\s*:\\s*(-?\\d+)");
+    private static final Pattern BOOLEAN_FIELD =
+            Pattern.compile("\"([a-zA-Z]+)\"\\s*:\\s*(true|false)");
     private final Path saveFile;
 
     public FileGameSaveRepository() {
@@ -28,7 +30,9 @@ public final class FileGameSaveRepository implements GameSaveRepository {
                 + "  \"score\": " + save.getScore() + ",\n"
                 + "  \"stage\": " + save.getStage() + ",\n"
                 + "  \"credits\": " + save.getCredits() + ",\n"
-                + "  \"ownedWeaponLevel\": " + save.getOwnedWeaponLevel() + "\n"
+                + "  \"ownedWeaponLevel\": " + save.getOwnedWeaponLevel() + ",\n"
+                + "  \"doubleLives\": " + save.hasDoubleLives() + ",\n"
+                + "  \"infiniteLives\": " + save.hasInfiniteLives() + "\n"
                 + "}\n";
         try {
             Files.createDirectories(saveFile.getParent());
@@ -47,7 +51,8 @@ public final class FileGameSaveRepository implements GameSaveRepository {
             String json = new String(Files.readAllBytes(saveFile), StandardCharsets.UTF_8);
             return new GameSave(getInt(json, "lives"), getInt(json, "weaponLevel"),
                     getInt(json, "score"), getInt(json, "stage"),
-                    getInt(json, "credits"), getInt(json, "ownedWeaponLevel"));
+                    getInt(json, "credits"), getInt(json, "ownedWeaponLevel"),
+                    getBoolean(json, "doubleLives"), getBoolean(json, "infiniteLives"));
         } catch (IOException | IllegalArgumentException exception) {
             throw new IllegalStateException("Could not load game state from " + saveFile, exception);
         }
@@ -70,6 +75,16 @@ public final class FileGameSaveRepository implements GameSaveRepository {
             }
         }
         throw new IllegalArgumentException("Missing save field: " + key);
+    }
+
+    private boolean getBoolean(String json, String key) {
+        Matcher matcher = BOOLEAN_FIELD.matcher(json);
+        while (matcher.find()) {
+            if (key.equals(matcher.group(1))) {
+                return Boolean.parseBoolean(matcher.group(2));
+            }
+        }
+        return false;
     }
 
     private Path resolveSaveFile() {

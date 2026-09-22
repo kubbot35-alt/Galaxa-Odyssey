@@ -5,6 +5,7 @@ import org.example.model.GameSave;
 import org.example.model.GameState;
 import org.example.model.Player;
 import org.example.model.enums.DifficultyLevel;
+import org.example.model.enums.UpgradeOption;
 import org.example.repository.GameSaveRepository;
 import org.example.service.GameService;
 import org.example.service.SettingsService;
@@ -37,8 +38,11 @@ public final class GameController {
         GameSave save = saveRepository.load();
         if (save != null) {
             model.setHighScore(save.getScore());
+            model.setProfileScore(save.getScore());
             model.setCredits(save.getCredits());
             model.setOwnedWeaponLevel(save.getOwnedWeaponLevel());
+            model.setDoubleLives(save.hasDoubleLives());
+            model.setInfiniteLives(save.hasInfiniteLives());
         }
         soundPlayer.startMenuMusic();
     }
@@ -58,8 +62,14 @@ public final class GameController {
         if (save == null) {
             model.getPlayer().setWeaponLevel(model.getOwnedWeaponLevel());
             model.setWave(0);
+            if (model.hasDoubleLives()) {
+                model.getPlayer().doubleLives();
+            }
         } else {
             model.getPlayer().setLives(save.getLives());
+            if (model.hasDoubleLives()) {
+                model.getPlayer().setLives(Math.max(model.getPlayer().getLives(), 6));
+            }
             model.getPlayer().setWeaponLevel(save.getWeaponLevel());
             model.getPlayer().setScore(save.getScore());
             model.getPlayer().resetShield();
@@ -67,6 +77,12 @@ public final class GameController {
             model.setWave(Math.max(0, save.getStage() - 1));
             model.setCredits(save.getCredits());
             model.setOwnedWeaponLevel(save.getOwnedWeaponLevel());
+            model.setProfileScore(save.getScore());
+            model.setDoubleLives(save.hasDoubleLives());
+            model.setInfiniteLives(save.hasInfiniteLives());
+        }
+        if (model.hasDoubleLives() && save != null) {
+            model.getPlayer().setLives(Math.max(model.getPlayer().getLives(), 6));
         }
         model.clearTransientObjects();
         waveService.spawnNextWave(model);
@@ -77,8 +93,10 @@ public final class GameController {
     public void saveGame() {
         if (model.getPlayer() == null) return;
         Player player = model.getPlayer();
+        model.setProfileScore(player.getScore());
         saveRepository.save(new GameSave(player.getLives(), player.getWeaponLevel(), player.getScore(),
-                model.getWave(), model.getCredits(), model.getOwnedWeaponLevel()));
+                model.getWave(), model.getCredits(), model.getOwnedWeaponLevel(),
+                model.hasDoubleLives(), model.hasInfiniteLives()));
     }
 
     public void pause() {
@@ -134,14 +152,28 @@ public final class GameController {
     }
 
     public void selectUpgrade(int delta) {
-        model.setUpgradeSelection((model.getUpgradeSelection() + delta + 3) % 3);
+        int optionCount = UpgradeOption.values().length;
+        model.setUpgradeSelection((model.getUpgradeSelection() + delta + optionCount) % optionCount);
     }
 
     public void activateUpgrade() {
         if (upgradeService.purchase(model, model.getUpgradeSelection())) {
-            if (model.getUpgradeSelection() == 2) returnToMenu();
+            if (model.getUpgradeSelection() == UpgradeOption.RETURN.ordinal()) returnToMenu();
             else soundPlayer.play(org.example.model.enums.SoundType.POWER_UP);
+            saveProfile();
         }
+    }
+
+    private void saveProfile() {
+        saveRepository.save(new GameSave(
+                model.getPlayer() == null ? 3 : model.getPlayer().getLives(),
+                model.getPlayer() == null ? model.getOwnedWeaponLevel() : model.getPlayer().getWeaponLevel(),
+                model.getProfileScore(),
+                model.getWave(),
+                model.getCredits(),
+                model.getOwnedWeaponLevel(),
+                model.hasDoubleLives(),
+                model.hasInfiniteLives()));
     }
 
     public void selectSettings(int delta) {
