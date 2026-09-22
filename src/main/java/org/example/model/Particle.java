@@ -1,13 +1,13 @@
-package org.example;
+package org.example.model;
 
 import java.awt.Color;
 import java.awt.Graphics2D;
 
-class Particle {
-    double x, y, vx, vy;
-    Color color;
-    int life, maxLife;
-    float size;
+public class Particle {
+    public double x, y, vx, vy;
+    public Color color;
+    public int life, maxLife;
+    public float size;
 
     public Particle(double x, double y, double vx, double vy, Color color, int maxLife, float size) {
         this.x = x;

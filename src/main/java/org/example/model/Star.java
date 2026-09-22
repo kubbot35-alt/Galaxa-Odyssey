@@ -1,11 +1,11 @@
-package org.example;
+package org.example.model;
 
 import java.awt.Color;
 import java.awt.Graphics2D;
 
-class Star {
-    double x, y, speed;
-    int size;
+public class Star {
+    public double x, y, speed;
+    public int size;
 
     public Star(int width, int height) {
         x = Math.random() * width;

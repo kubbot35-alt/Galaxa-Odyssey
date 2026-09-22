@@ -1,4 +1,4 @@
-package org.example;
+package org.example.view;
 
 import javax.swing.*;
 import java.awt.*;
@@ -11,6 +11,13 @@ import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Iterator;
+import org.example.model.Bullet;
+import org.example.model.Enemy;
+import org.example.model.GameState;
+import org.example.model.Particle;
+import org.example.model.Player;
+import org.example.model.PowerUp;
+import org.example.model.Star;
 
 class GamePanel extends JPanel implements ActionListener, KeyListener {
     private final Timer timer;

@@ -1,15 +1,15 @@
-package org.example;
+package org.example.model;
 
 import java.awt.*;
 
-class Player {
-    int x, y, width = 40, height = 40;
-    int speed = 6;
-    boolean left, right;
-    int lives = 3;
-    int score = 0;
-    int weaponLevel = 1;
-    int shield = 100;
+public class Player {
+    public int x, y, width = 40, height = 40;
+    public int speed = 6;
+    public boolean left, right;
+    public int lives = 3;
+    public int score = 0;
+    public int weaponLevel = 1;
+    public int shield = 100;
 
     public Player(int startX, int startY) {
         x = startX;

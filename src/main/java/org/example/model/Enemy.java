@@ -1,16 +1,16 @@
-package org.example;
+package org.example.model;
 
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 
-class Enemy {
-    double x, y, startX;
-    double startY;
-    int width = 32, height = 32;
-    double angle = 0;
-    int type;
-    boolean diving;
+public class Enemy {
+    public double x, y, startX;
+    public double startY;
+    public int width = 32, height = 32;
+    public double angle = 0;
+    public int type;
+    public boolean diving;
 
     public Enemy(double x, double y, int type) {
         this.x = x;
