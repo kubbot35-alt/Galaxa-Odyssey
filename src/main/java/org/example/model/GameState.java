@@ -1,5 +1,5 @@
-package org.example;
+package org.example.model;
 
-enum GameState {
+public enum GameState {
     MENU, UPGRADES, SETTINGS, HOW_TO_PLAY, PLAYING, GAMEOVER
 }
