@@ -5,11 +5,11 @@ import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
 
-final class ResourceLoader {
+public final class ResourceLoader {
     private ResourceLoader() {
     }
 
-    static BufferedImage loadImage(String resourcePath) {
+    public static BufferedImage loadImage(String resourcePath) {
         String normalizedPath = resourcePath.startsWith("/")
                 ? resourcePath
                 : "/" + resourcePath;

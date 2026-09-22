@@ -1,15 +1,18 @@
 package org.example.model;
 
-import java.awt.*;
+public final class Player {
+    public static final int WIDTH = 40;
+    public static final int HEIGHT = 40;
 
-public class Player {
-    public int x, y, width = 40, height = 40;
-    public int speed = 6;
-    public boolean left, right;
-    public int lives = 3;
-    public int score = 0;
-    public int weaponLevel = 1;
-    public int shield = 100;
+    private int x;
+    private final int y;
+    private int speed = 6;
+    private boolean movingLeft;
+    private boolean movingRight;
+    private int lives = 3;
+    private int score;
+    private int shield = 100;
+    private int weaponLevel = 1;
 
     public Player(int startX, int startY) {
         x = startX;
@@ -17,32 +20,43 @@ public class Player {
     }
 
     public void update(int boundWidth) {
-        if (left && x > 10) x -= speed;
-        if (right && x < boundWidth - width - 10) x += speed;
+        if (movingLeft && x > 10) {
+            x -= speed;
+        }
+        if (movingRight && x < boundWidth - WIDTH - 10) {
+            x += speed;
+        }
     }
 
-    public void draw(Graphics2D g2d) {
-        g2d.setColor(new Color(40, 235, 255, 45));
-        g2d.fillOval(x - 10, y - 10, width + 20, height + 26);
-
-        GradientPaint hull = new GradientPaint(x, y, new Color(230, 250, 255),
-                x + width, y + height, new Color(35, 80, 170));
-        g2d.setPaint(hull);
-        int[] xPoints = {x + width / 2, x + 5, x + 12, x + width - 12, x + width - 5};
-        int[] yPoints = {y, y + height - 5, y + height, y + height, y + height - 5};
-        g2d.fillPolygon(xPoints, yPoints, xPoints.length);
-
-        g2d.setColor(new Color(20, 35, 80));
-        g2d.fillOval(x + width / 2 - 6, y + 13, 12, 15);
-        g2d.setColor(new Color(135, 250, 255));
-        g2d.fillOval(x + width / 2 - 3, y + 15, 6, 9);
-
-        g2d.setColor(new Color(80, 220, 255));
-        g2d.fillRoundRect(x + 4, y + height - 8, 8, 8, 4, 4);
-        g2d.fillRoundRect(x + width - 12, y + height - 8, 8, 8, 4, 4);
+    public void moveLeft(boolean moving) {
+        movingLeft = moving;
     }
 
-    public Rectangle getBounds() {
-        return new Rectangle(x, y, width, height);
+    public void moveRight(boolean moving) {
+        movingRight = moving;
     }
+
+    public void stopMoving() {
+        movingLeft = false;
+        movingRight = false;
+    }
+
+    public int getX() { return x; }
+    public int getY() { return y; }
+    public int getWidth() { return WIDTH; }
+    public int getHeight() { return HEIGHT; }
+    public int getLives() { return lives; }
+    public int getScore() { return score; }
+    public int getShield() { return shield; }
+    public int getWeaponLevel() { return weaponLevel; }
+    public void addScore(int value) { score += value; }
+    public void setScore(int value) { score = value; }
+    public void addLife() { lives++; }
+    public void loseLife() { lives--; }
+    public void setLives(int value) { lives = value; }
+    public void resetShield() { shield = 100; }
+    public void reduceShield(int amount) { shield = Math.max(0, shield - amount); }
+    public void setShield(int value) { shield = value; }
+    public void setWeaponLevel(int value) { weaponLevel = Math.max(1, Math.min(3, value)); }
+    public void increaseWeaponLevel() { setWeaponLevel(weaponLevel + 1); }
 }

@@ -107,3 +107,13 @@ biznesowe zamiast bezpośredniej modyfikacji stanu.
 ## Licencja
 
 Projekt edukacyjny i demonstracyjny. Brak osobnej licencji komercyjnej.
+
+### Aktualny podzial odpowiedzialnosci
+
+`GameModel` przechowuje stan i encje domenowe bez zaleznosci od Swing lub
+`Graphics2D`. `GameService`, `CollisionService` i `WaveService` wykonują
+aktualizacje rozgrywki, a `GameController` i `InputController` obsluguja
+akcje uzytkownika. Zapis jest ukryty za `GameSaveRepository`, tworzenie encji
+za `GameObjectFactory`, natomiast `GameRenderer`, `MenuRenderer` i
+`HudRenderer` odpowiadaja za rysowanie. Enumy w `model.enums` zastępują
+magiczne typy przeciwnikow, power-upow, dzwiekow i opcji menu.

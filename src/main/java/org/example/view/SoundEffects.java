@@ -1,11 +1,12 @@
 package org.example.view;
 
+import org.example.model.enums.SoundType;
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.SourceDataLine;
 import java.util.Random;
 
-class SoundEffects {
+public final class SoundEffects {
     private static boolean soundEnabled = true;
     private static volatile boolean menuMusicPlaying;
     private static Thread menuMusicThread;
@@ -94,7 +95,7 @@ class SoundEffects {
         return samples;
     }
 
-    public static void playSound(String type) {
+    public static void playSound(SoundType type) {
         if (!soundEnabled) return;
 
         new Thread(() -> {
@@ -107,14 +108,14 @@ class SoundEffects {
                 sdl.start();
 
                 switch (type) {
-                    case "shoot":
+                    case SHOOT:
                         buf = new byte[1200];
                         for (int i = 0; i < buf.length; i++) {
                             buf[i] = (byte) (Math.sin(i / 1.8) * (127 - i * (127.0 / buf.length)));
                         }
                         sdl.write(buf, 0, buf.length);
                         break;
-                    case "explosion":
+                    case EXPLOSION:
                         buf = new byte[4000];
                         Random r = new Random();
                         for (int i = 0; i < buf.length; i++) {
@@ -122,7 +123,7 @@ class SoundEffects {
                         }
                         sdl.write(buf, 0, buf.length);
                         break;
-                    case "powerup":
+                    case POWER_UP:
                         buf = new byte[2500];
                         for (int i = 0; i < buf.length; i++) {
                             buf[i] = (byte) (Math.sin(i / (8.0 + i * 0.005)) * 90);

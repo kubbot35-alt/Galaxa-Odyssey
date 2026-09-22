@@ -1,12 +1,10 @@
 package org.example.model;
 
-import java.awt.Color;
-import java.awt.Graphics2D;
-import java.awt.Rectangle;
-
-public class Bullet {
-    public int x, y, speed = 12;
-    public boolean fromPlayer;
+public final class Bullet {
+    public static final int SPEED = 12;
+    private int x;
+    private int y;
+    private final boolean fromPlayer;
 
     public Bullet(int x, int y, boolean fromPlayer) {
         this.x = x;
@@ -14,20 +12,8 @@ public class Bullet {
         this.fromPlayer = fromPlayer;
     }
 
-    public void update() {
-        if (fromPlayer) y -= speed;
-        else y += (speed - 4);
-    }
-
-    public void draw(Graphics2D g2d) {
-        Color color = fromPlayer ? new Color(65, 240, 255) : new Color(255, 75, 145);
-        g2d.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), 55));
-        g2d.fillOval(x - 8, y - 5, 16, 24);
-        g2d.setColor(color);
-        g2d.fillRoundRect(x - 2, y, 4, 13, 3, 3);
-    }
-
-    public Rectangle getBounds() {
-        return new Rectangle(x - 3, y, 6, 12);
-    }
+    public void update() { y += fromPlayer ? -SPEED : SPEED - 4; }
+    public int getX() { return x; }
+    public int getY() { return y; }
+    public boolean isFromPlayer() { return fromPlayer; }
 }
