@@ -64,22 +64,40 @@ W menu można również korzystać z myszy.
 src/
 ├── main/
 │   ├── java/org/example/
-│   │   ├── Main.java
-│   │   ├── GalagaGame.java
-│   │   ├── GamePanel.java
-│   │   ├── Player.java
-│   │   ├── Enemy.java
-│   │   ├── Bullet.java
-│   │   ├── PowerUp.java
-│   │   ├── Particle.java
-│   │   ├── Star.java
-│   │   ├── SoundEffects.java
-│   │   └── ResourceLoader.java
+│   │   ├── model/
+│   │   │   ├── GameModel.java
+│   │   │   ├── GameState.java
+│   │   │   ├── GameObjectFactory.java
+│   │   │   ├── MenuOption.java
+│   │   │   ├── UpgradeOption.java
+│   │   │   ├── SettingsOption.java
+│   │   │   ├── EnemyType.java
+│   │   │   ├── PowerUpType.java
+│   │   │   ├── Player.java
+│   │   │   ├── Enemy.java
+│   │   │   ├── Bullet.java
+│   │   │   ├── PowerUp.java
+│   │   │   ├── Particle.java
+│   │   │   └── Star.java
+│   │   ├── controller/
+│   │   │   ├── Main.java
+│   │   │   └── GameController.java
+│   │   └── view/
+│   │       ├── GalagaGame.java
+│   │       ├── GamePanel.java
+│   │       ├── ResourceLoader.java
+│   │       └── SoundEffects.java
 │   └── resources/
 │       ├── menu/
 │       └── META-INF/
 └── ...
 ```
+
+Logika domenowa jest oddzielona od tworzenia obiektów i stanu interfejsu:
+`GameModel` przechowuje dane, `GameController` wykonuje akcje użytkownika,
+`GamePanel` renderuje widok, a `GameObjectFactory` centralizuje tworzenie
+obiektów gry. Klasy encji ukrywają swoje pola i udostępniają operacje
+biznesowe zamiast bezpośredniej modyfikacji stanu.
 
 ## Licencja
 
