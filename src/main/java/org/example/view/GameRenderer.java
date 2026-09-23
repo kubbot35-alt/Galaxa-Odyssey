@@ -6,10 +6,12 @@ import org.example.model.enums.DifficultyLevel;
 import org.example.model.enums.UpgradeOption;
 
 import java.awt.*;
+import java.awt.image.BufferedImage;
 
 public final class GameRenderer {
     private final MenuRenderer menuRenderer = new MenuRenderer();
     private final HudRenderer hudRenderer = new HudRenderer();
+    private final BufferedImage playerShip = ResourceLoader.loadImage("ships/player-ship.png");
 
     public void render(Graphics2D g, GameModel model) {
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
@@ -62,7 +64,10 @@ public final class GameRenderer {
     }
 
     private void drawPlayer(Graphics2D g, Player p) {
-        drawPlayer(g, p, new Color(230, 250, 255));
+        int width = 60;
+        int height = 66;
+        g.drawImage(playerShip, p.getX() + p.getWidth() / 2 - width / 2,
+                p.getY() + p.getHeight() / 2 - height / 2, width, height, null);
     }
 
     private void drawPlayer(Graphics2D g, Player p, Color shipTint) {
