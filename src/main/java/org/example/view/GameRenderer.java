@@ -12,6 +12,7 @@ public final class GameRenderer {
     private final MenuRenderer menuRenderer = new MenuRenderer();
     private final HudRenderer hudRenderer = new HudRenderer();
     private final BufferedImage playerShip = ResourceLoader.loadImage("ships/player-ship.png");
+    private final BufferedImage secondPlayerShip = ResourceLoader.loadImage("ships/player-ship-2.png");
 
     public void render(Graphics2D g, GameModel model) {
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
@@ -54,7 +55,7 @@ public final class GameRenderer {
     private void drawGame(Graphics2D g, GameModel model) {
         drawPlayer(g, model.getPlayer());
         if (model.isTwoPlayerMode() && model.getSecondPlayer() != null) {
-            drawPlayer(g, model.getSecondPlayer(), new Color(255, 180, 90));
+            drawSecondPlayer(g, model.getSecondPlayer());
         }
         for (Bullet b : model.getBullets()) drawBullet(g, b);
         for (Bomb b : model.getBombs()) drawBomb(g, b);
@@ -67,6 +68,13 @@ public final class GameRenderer {
         int width = 60;
         int height = 66;
         g.drawImage(playerShip, p.getX() + p.getWidth() / 2 - width / 2,
+                p.getY() + p.getHeight() / 2 - height / 2, width, height, null);
+    }
+
+    private void drawSecondPlayer(Graphics2D g, Player p) {
+        int width = 66;
+        int height = 66;
+        g.drawImage(secondPlayerShip, p.getX() + p.getWidth() / 2 - width / 2,
                 p.getY() + p.getHeight() / 2 - height / 2, width, height, null);
     }
 
