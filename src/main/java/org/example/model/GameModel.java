@@ -13,6 +13,7 @@ public final class GameModel {
     private GameState gameState = GameState.MENU;
     private DifficultyLevel difficultyLevel = DifficultyLevel.NORMAL;
     private Player player;
+    private Player secondPlayer;
     private final List<Bullet> bullets = new ArrayList<Bullet>();
     private final List<Bomb> bombs = new ArrayList<Bomb>();
     private final List<Enemy> enemies = new ArrayList<Enemy>();
@@ -29,11 +30,15 @@ public final class GameModel {
     private boolean particlesEnabled = true;
     private boolean soundEnabled = true;
     private boolean spaceHeld;
+    private boolean secondPlayerFireHeld;
     private int fireCooldown;
+    private int secondPlayerFireCooldown;
     private int menuSelection;
+    private int playerModeSelection;
     private int upgradeSelection;
     private int settingsSelection;
     private int difficultySelection;
+    private boolean twoPlayerMode;
 
     public GameModel() {
         for (int i = 0; i < 120; i++) {
@@ -47,6 +52,8 @@ public final class GameModel {
     public void setDifficultyLevel(DifficultyLevel value) { difficultyLevel = value; }
     public Player getPlayer() { return player; }
     public void setPlayer(Player value) { player = value; }
+    public Player getSecondPlayer() { return secondPlayer; }
+    public void setSecondPlayer(Player value) { secondPlayer = value; }
     public List<Bullet> getBullets() { return bullets; }
     public List<Bomb> getBombs() { return bombs; }
     public List<Enemy> getEnemies() { return enemies; }
@@ -76,16 +83,26 @@ public final class GameModel {
     public void setSoundEnabled(boolean value) { soundEnabled = value; }
     public boolean isSpaceHeld() { return spaceHeld; }
     public void setSpaceHeld(boolean value) { spaceHeld = value; }
+    public boolean isSecondPlayerFireHeld() { return secondPlayerFireHeld; }
+    public void setSecondPlayerFireHeld(boolean value) { secondPlayerFireHeld = value; }
     public int getFireCooldown() { return fireCooldown; }
     public void setFireCooldown(int value) { fireCooldown = value; }
+    public int getSecondPlayerFireCooldown() { return secondPlayerFireCooldown; }
+    public void setSecondPlayerFireCooldown(int value) { secondPlayerFireCooldown = value; }
+    public void setSecondPlayerMovingLeft(boolean value) { if (secondPlayer != null) secondPlayer.moveLeft(value); }
+    public void setSecondPlayerMovingRight(boolean value) { if (secondPlayer != null) secondPlayer.moveRight(value); }
     public int getMenuSelection() { return menuSelection; }
     public void setMenuSelection(int value) { menuSelection = value; }
+    public int getPlayerModeSelection() { return playerModeSelection; }
+    public void setPlayerModeSelection(int value) { playerModeSelection = value; }
     public int getUpgradeSelection() { return upgradeSelection; }
     public void setUpgradeSelection(int value) { upgradeSelection = value; }
     public int getSettingsSelection() { return settingsSelection; }
     public void setSettingsSelection(int value) { settingsSelection = value; }
     public int getDifficultySelection() { return difficultySelection; }
     public void setDifficultySelection(int value) { difficultySelection = value; }
+    public boolean isTwoPlayerMode() { return twoPlayerMode; }
+    public void setTwoPlayerMode(boolean value) { twoPlayerMode = value; }
 
     public void clearTransientObjects() {
         bullets.clear();
@@ -94,7 +111,9 @@ public final class GameModel {
         powerUps.clear();
         particles.clear();
         spaceHeld = false;
+        secondPlayerFireHeld = false;
         fireCooldown = 0;
+        secondPlayerFireCooldown = 0;
     }
 
     public void addParticle(double x, double y, double vx, double vy,

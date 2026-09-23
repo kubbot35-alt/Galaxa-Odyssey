@@ -33,6 +33,11 @@ public final class GameService {
         player.update(GameModel.WIDTH);
         if (model.getFireCooldown() > 0) model.setFireCooldown(model.getFireCooldown() - 1);
         if (model.isSpaceHeld() && model.getFireCooldown() == 0) fire(model);
+        if (model.isTwoPlayerMode() && model.getSecondPlayer() != null) {
+            model.getSecondPlayer().update(GameModel.WIDTH);
+            if (model.getSecondPlayerFireCooldown() > 0) model.setSecondPlayerFireCooldown(model.getSecondPlayerFireCooldown() - 1);
+            if (model.isSecondPlayerFireHeld() && model.getSecondPlayerFireCooldown() == 0) fireSecondPlayer(model);
+        }
 
         for (Iterator<Bullet> iterator = model.getBullets().iterator(); iterator.hasNext();) {
             Bullet bullet = iterator.next();
@@ -78,6 +83,24 @@ public final class GameService {
             model.getBullets().add(factory.createPlayerBullet(player.getX() + player.getWidth() - 2, player.getY()));
         }
         model.setFireCooldown(Math.max(5, 12 - level * 2));
+    }
+
+    public void fireSecondPlayer(GameModel model) {
+        Player secondPlayer = model.getSecondPlayer();
+        if (secondPlayer == null) return;
+        soundPlayer.accept(SoundType.SHOOT);
+        int level = secondPlayer.getWeaponLevel();
+        if (level == 1) {
+            model.getBullets().add(factory.createPlayerBullet(secondPlayer.getX() + secondPlayer.getWidth() / 2, secondPlayer.getY()));
+        } else if (level == 2) {
+            model.getBullets().add(factory.createPlayerBullet(secondPlayer.getX() + 8, secondPlayer.getY()));
+            model.getBullets().add(factory.createPlayerBullet(secondPlayer.getX() + secondPlayer.getWidth() - 8, secondPlayer.getY()));
+        } else {
+            model.getBullets().add(factory.createPlayerBullet(secondPlayer.getX() + secondPlayer.getWidth() / 2, secondPlayer.getY() - 4));
+            model.getBullets().add(factory.createPlayerBullet(secondPlayer.getX() + 2, secondPlayer.getY()));
+            model.getBullets().add(factory.createPlayerBullet(secondPlayer.getX() + secondPlayer.getWidth() - 2, secondPlayer.getY()));
+        }
+        model.setSecondPlayerFireCooldown(Math.max(5, 12 - level * 2));
     }
 
     private void resolvePlayerBulletHits(GameModel model) {
@@ -148,6 +171,23 @@ public final class GameService {
 
     private void damagePlayer(GameModel model, int damage) {
         Player player = model.getPlayer();
+        if (model.isTwoPlayerMode() && model.getSecondPlayer() != null && player.getLives() <= 0) {
+            Player secondPlayer = model.getSecondPlayer();
+            if (secondPlayer.getShield() > 0) {
+                secondPlayer.reduceShield(damage);
+                return;
+            }
+            if (secondPlayer.getLives() > 0) {
+                secondPlayer.loseLife();
+                secondPlayer.resetShield();
+                explosion(model, secondPlayer.getX() + 20, secondPlayer.getY() + 20, 80, 210, 255, 32);
+                soundPlayer.accept(SoundType.EXPLOSION);
+                if (secondPlayer.getLives() <= 0) {
+                    model.setGameState(org.example.model.GameState.GAMEOVER);
+                }
+                return;
+            }
+        }
         if (model.hasInfiniteLives()) {
             player.resetShield();
             return;
@@ -160,7 +200,7 @@ public final class GameService {
         player.resetShield();
         explosion(model, player.getX() + 20, player.getY() + 20, 80, 210, 255, 32);
         soundPlayer.accept(SoundType.EXPLOSION);
-        if (player.getLives() <= 0) {
+        if (player.getLives() <= 0 && (!model.isTwoPlayerMode() || model.getSecondPlayer() == null || model.getSecondPlayer().getLives() <= 0)) {
             model.setGameState(org.example.model.GameState.GAMEOVER);
         }
     }
@@ -168,6 +208,10 @@ public final class GameService {
     private void explodeBomb(GameModel model) {
         Player player = model.getPlayer();
         explosion(model, player.getX() + 20, player.getY() + 20, 255, 70, 80, 45);
+        if (model.isTwoPlayerMode() && model.getSecondPlayer() != null) {
+            Player secondPlayer = model.getSecondPlayer();
+            explosion(model, secondPlayer.getX() + 20, secondPlayer.getY() + 20, 255, 70, 80, 45);
+        }
         soundPlayer.accept(SoundType.EXPLOSION);
         model.setGameState(org.example.model.GameState.GAMEOVER);
     }

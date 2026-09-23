@@ -58,7 +58,15 @@ public final class GameController {
 
     public void startGame() {
         GameSave save = saveRepository.load();
-        model.setPlayer(new Player(380, 520));
+        model.setPlayer(new Player(260, 520));
+        if (model.isTwoPlayerMode()) {
+            model.setSecondPlayer(new Player(500, 520));
+            model.getSecondPlayer().setWeaponLevel(model.getOwnedWeaponLevel());
+            model.getSecondPlayer().setLives(model.getPlayer().getLives());
+            model.getSecondPlayer().setShield(100);
+        } else {
+            model.setSecondPlayer(null);
+        }
         if (save == null) {
             model.getPlayer().setWeaponLevel(model.getOwnedWeaponLevel());
             model.setWave(0);
@@ -84,10 +92,32 @@ public final class GameController {
         if (model.hasDoubleLives() && save != null) {
             model.getPlayer().setLives(Math.max(model.getPlayer().getLives(), 6));
         }
+        if (model.isTwoPlayerMode()) {
+            model.getSecondPlayer().setWeaponLevel(model.getOwnedWeaponLevel());
+            model.getSecondPlayer().setLives(model.getPlayer().getLives());
+            model.getSecondPlayer().resetShield();
+        }
         model.clearTransientObjects();
         waveService.spawnNextWave(model);
         soundPlayer.stopMenuMusic();
         model.setGameState(GameState.PLAYING);
+    }
+
+    public void selectPlayerMode(int delta) {
+        int optionCount = 2;
+        model.setPlayerModeSelection((model.getPlayerModeSelection() + delta + optionCount) % optionCount);
+    }
+
+    public void activatePlayerMode() {
+        model.setTwoPlayerMode(model.getPlayerModeSelection() == 1);
+        model.setDifficultySelection(model.getDifficultyLevel().ordinal());
+        soundPlayer.stopMenuMusic();
+        model.setGameState(GameState.DIFFICULTY_SELECTION);
+    }
+
+    public void cancelPlayerModeSelection() {
+        model.setGameState(GameState.MENU);
+        soundPlayer.startMenuMusic();
     }
 
     public void saveGame() {
@@ -114,6 +144,9 @@ public final class GameController {
     public void returnToMenu() {
         if (model.getPlayer() != null) model.getPlayer().stopMoving();
         model.setSpaceHeld(false);
+        model.setSecondPlayerFireHeld(false);
+        model.setSecondPlayerMovingLeft(false);
+        model.setSecondPlayerMovingRight(false);
         model.setGameState(GameState.MENU);
         soundPlayer.startMenuMusic();
     }
@@ -125,9 +158,9 @@ public final class GameController {
     public void activateMenu() {
         switch (model.getMenuSelection()) {
             case 0:
-                model.setDifficultySelection(model.getDifficultyLevel().ordinal());
+                model.setPlayerModeSelection(model.isTwoPlayerMode() ? 1 : 0);
                 soundPlayer.stopMenuMusic();
-                model.setGameState(GameState.DIFFICULTY_SELECTION);
+                model.setGameState(GameState.PLAYER_MODE_SELECTION);
                 break;
             case 1: soundPlayer.stopMenuMusic(); model.setGameState(GameState.UPGRADES); break;
             case 2: soundPlayer.stopMenuMusic(); model.setGameState(GameState.SETTINGS); break;
@@ -193,7 +226,11 @@ public final class GameController {
 
     public void moveLeft(boolean value) { if (model.getPlayer() != null) model.getPlayer().moveLeft(value); }
     public void moveRight(boolean value) { if (model.getPlayer() != null) model.getPlayer().moveRight(value); }
+    public void moveSecondPlayerLeft(boolean value) { if (model.getPlayer() != null && model.isTwoPlayerMode()) model.getSecondPlayer().moveLeft(value); }
+    public void moveSecondPlayerRight(boolean value) { if (model.getPlayer() != null && model.isTwoPlayerMode()) model.getSecondPlayer().moveRight(value); }
     public void setSpaceHeld(boolean value) { model.setSpaceHeld(value); }
+    public void setSecondPlayerFireHeld(boolean value) { model.setSecondPlayerFireHeld(value); }
     public void fireIfReady() { if (model.getPlayer() != null && model.getFireCooldown() == 0) gameService.fire(model); }
+    public void fireSecondPlayerIfReady() { if (model.getPlayer() != null && model.isTwoPlayerMode() && model.getSecondPlayerFireCooldown() == 0) gameService.fireSecondPlayer(model); }
     public GameModel getModel() { return model; }
 }

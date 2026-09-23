@@ -28,6 +28,7 @@ public final class GameRenderer {
         }
         switch (model.getGameState()) {
             case MENU: menuRenderer.render(g, model); break;
+            case PLAYER_MODE_SELECTION: playerModeSelection(g, model); break;
             case DIFFICULTY_SELECTION: difficultySelection(g, model); break;
             case PLAYING: drawGame(g, model); break;
             case PAUSED: drawGame(g, model); overlay(g, "PAUSED", "ESC  -  RESUME", "ENTER  -  RETURN TO MENU"); break;
@@ -50,6 +51,9 @@ public final class GameRenderer {
 
     private void drawGame(Graphics2D g, GameModel model) {
         drawPlayer(g, model.getPlayer());
+        if (model.isTwoPlayerMode() && model.getSecondPlayer() != null) {
+            drawPlayer(g, model.getSecondPlayer(), new Color(255, 180, 90));
+        }
         for (Bullet b : model.getBullets()) drawBullet(g, b);
         for (Bomb b : model.getBombs()) drawBomb(g, b);
         for (Enemy e : model.getEnemies()) drawEnemy(g, e);
@@ -58,9 +62,13 @@ public final class GameRenderer {
     }
 
     private void drawPlayer(Graphics2D g, Player p) {
+        drawPlayer(g, p, new Color(230, 250, 255));
+    }
+
+    private void drawPlayer(Graphics2D g, Player p, Color shipTint) {
         int x = p.getX(), y = p.getY(), w = p.getWidth(), h = p.getHeight();
         g.setColor(new Color(40, 235, 255, 45)); g.fillOval(x - 10, y - 10, w + 20, h + 26);
-        g.setPaint(new GradientPaint(x, y, new Color(230, 250, 255), x + w, y + h, new Color(35, 80, 170)));
+        g.setPaint(new GradientPaint(x, y, shipTint, x + w, y + h, new Color(35, 80, 170)));
         int[] xs = {x + w / 2, x + 5, x + 12, x + w - 12, x + w - 5};
         int[] ys = {y, y + h - 5, y + h, y + h, y + h - 5}; g.fillPolygon(xs, ys, xs.length);
         g.setColor(new Color(20, 35, 80)); g.fillOval(x + w / 2 - 6, y + 13, 12, 15);
@@ -150,6 +158,23 @@ public final class GameRenderer {
         card(g, 345, "RETURN TO HANGAR", "Back to main menu", "EXIT", new Color(255, 95, 180), m.getSettingsSelection() == 2);
     }
 
+    private void playerModeSelection(Graphics2D g, GameModel model) {
+        header(g, "SELECT PLAY MODE", "SOLO OR DUEL MISSION", new Color(55, 245, 255));
+        String[] labels = {"1 PLAYER", "2 PLAYERS"};
+        String[] descriptions = {"Solo run with keyboard controls", "Co-op mode with second ship"};
+        Color[] accents = {new Color(100, 255, 180), new Color(175, 125, 255)};
+        for (int i = 0; i < labels.length; i++) {
+            int y = 220 + i * 100;
+            boolean selected = model.getPlayerModeSelection() == i;
+            card(g, y, labels[i], descriptions[i], selected ? "SELECTED" : "", accents[i], selected);
+        }
+        g.setColor(new Color(120, 170, 200, 150));
+        g.setFont(new Font("Monospaced", Font.BOLD, 11));
+        g.drawString("LEFT / RIGHT  SELECT", 30, 535);
+        MenuRenderer.centered(g, "ENTER  CONFIRM", 400, 535);
+        g.drawString("ESC  BACK", 650, 535);
+    }
+
     private void difficultySelection(Graphics2D g, GameModel model) {
         header(g, "SELECT DIFFICULTY", "CHOOSE YOUR MISSION PROFILE", new Color(55, 245, 255));
         DifficultyLevel[] levels = DifficultyLevel.values();
@@ -180,10 +205,11 @@ public final class GameRenderer {
 
     private void howToPlay(Graphics2D g) {
         header(g, "HOW TO PLAY", "MISSION CONTROL // FLIGHT MANUAL", new Color(255, 95, 180));
-        card(g, 155, "MOVE SHIP", "or LEFT / RIGHT", "A / D", new Color(55, 245, 255), false);
-        card(g, 225, "FIRE WEAPONS", "hold for continuous fire", "SPACE", new Color(175, 125, 255), false);
-        card(g, 295, "PAUSE MISSION", "ESC resumes / ENTER returns", "ESC", new Color(255, 95, 180), false);
-        card(g, 365, "MENU ACTION", "confirm selected option", "ENTER", new Color(255, 220, 100), false);
+        card(g, 155, "MOVE SHIP 1", "LEFT / RIGHT", "← / →", new Color(55, 245, 255), false);
+        card(g, 225, "FIRE WEAPONS 1", "hold for continuous fire", "SPACE", new Color(175, 125, 255), false);
+        card(g, 295, "MOVE SHIP 2", "LEFT / RIGHT", "A / D", new Color(120, 230, 255), false);
+        card(g, 365, "FIRE WEAPONS 2", "hold for continuous fire", "F", new Color(255, 180, 90), false);
+        card(g, 435, "PAUSE / MENU", "ESC resumes / ENTER returns", "ESC", new Color(255, 95, 180), false);
     }
 
     private void overlay(Graphics2D g, String title, String first, String second) {
