@@ -5,6 +5,8 @@ import {
   EnemyType,
   ENEMY_CONFIGS,
   PowerUpType,
+  WeaponMode,
+  WEAPON_MODE_CONFIGS,
   UpgradeOption,
   UPGRADE_CONFIGS,
   SettingsOption,
@@ -21,7 +23,10 @@ import {
   ENEMY_HEIGHT,
   BOMB_SIZE,
   POWERUP_SIZE,
+  POWERUP_TOKEN_SIZE,
   MAX_SHIELD,
+  MAX_WEAPON_ENERGY,
+  LASER_BEAM_WIDTH,
 } from './constants';
 import { soundEngine } from '../audio/soundEngine';
 import { ACHIEVEMENTS, Achievement, AchievementProgress } from '../types/achievements';
@@ -36,8 +41,11 @@ export interface Star {
 export interface Bullet {
   x: number;
   y: number;
+  vx: number;
   vy: number;
   isFromPlayer: boolean;
+  color?: string;
+  size?: number;
 }
 
 export interface Bomb {
@@ -54,12 +62,16 @@ export interface Enemy {
   angle: number;
   type: EnemyType;
   diving: boolean;
+  hp: number;
+  maxHp: number;
 }
 
 export interface PowerUp {
   x: number;
   y: number;
   type: PowerUpType;
+  bobAngle: number;
+  speed: number;
 }
 
 export interface Particle {
@@ -84,6 +96,10 @@ export interface PlayerState {
   shield: number;
   score: number;
   weaponLevel: number;
+  weaponMode: WeaponMode;
+  unlockedWeaponModes: WeaponMode[];
+  weaponEnergy: number;
+  isLaserActive?: boolean;
   movingLeft: boolean;
   movingRight: boolean;
 }
@@ -94,6 +110,14 @@ export interface ActiveAchievementToast {
   subtitle: string;
   rewardCredits: number;
   iconName: string;
+}
+
+export interface WeaponAnnouncement {
+  title: string;
+  subtitle: string;
+  color: string;
+  timer: number;
+  maxTimer: number;
 }
 
 const SAVE_KEY = 'galaxa_odyssey_save';
@@ -130,6 +154,7 @@ export class GameEngine {
   public secondPlayerFireHeld = false;
   public fireCooldown = 0;
   public secondPlayerFireCooldown = 0;
+  private laserSoundTimer = 0;
 
   public menuSelection = 0;
   public playerModeSelection = 0;
@@ -143,6 +168,9 @@ export class GameEngine {
   private toastTimeout: number | null = null;
   public isAchievementsOpen = false;
   public tookDamageInCurrentWave = false;
+
+  // Weapon Announcement
+  public weaponAnnouncement: WeaponAnnouncement | null = null;
 
   private onStateChange?: () => void;
 
@@ -176,7 +204,6 @@ export class GameEngine {
       this.achievements = {};
     }
 
-    // Ensure all registered achievements exist in state
     for (const ach of ACHIEVEMENTS) {
       if (!this.achievements[ach.id]) {
         this.achievements[ach.id] = {
@@ -219,17 +246,14 @@ export class GameEngine {
       this.achievements[id] = { unlocked: false, currentProgress: 0 };
     }
 
-    // If already unlocked, ignore
     if (this.achievements[id].unlocked) return;
 
     this.achievements[id].unlocked = true;
     this.achievements[id].unlockedAt = Date.now();
     this.achievements[id].currentProgress = ach.maxProgress;
 
-    // Grant bonus credits
     this.credits += ach.rewardCredits;
 
-    // Trigger toast notification
     this.activeToast = {
       id: ach.id,
       title: ach.title,
@@ -345,6 +369,8 @@ export class GameEngine {
       const save: GameSaveData = {
         lives: this.player1.lives,
         weaponLevel: this.player1.weaponLevel,
+        weaponMode: this.player1.weaponMode,
+        unlockedModes: this.player1.unlockedWeaponModes,
         score: this.player1.score,
         stage: this.wave,
         credits: this.credits,
@@ -374,6 +400,8 @@ export class GameEngine {
       this.resetPlayers();
       this.player1.lives = data.lives ?? 3;
       this.player1.weaponLevel = data.weaponLevel ?? 1;
+      this.player1.weaponMode = data.weaponMode ?? WeaponMode.STANDARD;
+      this.player1.unlockedWeaponModes = data.unlockedModes ?? [WeaponMode.STANDARD];
       this.player1.score = data.score ?? 0;
       this.wave = Math.max(0, (data.stage ?? 1) - 1);
       this.credits = data.credits ?? this.credits;
@@ -413,6 +441,10 @@ export class GameEngine {
       shield: MAX_SHIELD,
       score: 0,
       weaponLevel: initialWeapon,
+      weaponMode: WeaponMode.STANDARD,
+      unlockedWeaponModes: [WeaponMode.STANDARD],
+      weaponEnergy: MAX_WEAPON_ENERGY,
+      isLaserActive: false,
       movingLeft: false,
       movingRight: false,
     };
@@ -428,6 +460,10 @@ export class GameEngine {
         shield: MAX_SHIELD,
         score: 0,
         weaponLevel: initialWeapon,
+        weaponMode: WeaponMode.STANDARD,
+        unlockedWeaponModes: [WeaponMode.STANDARD],
+        weaponEnergy: MAX_WEAPON_ENERGY,
+        isLaserActive: false,
         movingLeft: false,
         movingRight: false,
       };
@@ -446,6 +482,7 @@ export class GameEngine {
     this.powerUps = [];
     this.particles = [];
     this.tookDamageInCurrentWave = false;
+    this.weaponAnnouncement = null;
 
     if (this.twoPlayerMode) {
       this.unlockAchievement('coop_commander');
@@ -458,7 +495,6 @@ export class GameEngine {
   }
 
   public spawnNextWave() {
-    // Check wave achievements for previous wave if completed
     if (this.wave >= 1) {
       this.unlockAchievement('first_wave');
       if (this.difficultyLevel === DifficultyLevel.HARD) {
@@ -489,6 +525,7 @@ export class GameEngine {
         const type = row === 0 ? EnemyType.ELITE : EnemyType.STANDARD;
         const x = 100 + col * 75;
         const y = 40 + row * 45;
+        const hp = type === EnemyType.ELITE ? 3 : 1;
         this.enemies.push({
           x,
           y,
@@ -497,106 +534,209 @@ export class GameEngine {
           angle: Math.random() * Math.PI * 2,
           type,
           diving: false,
+          hp,
+          maxHp: hp,
         });
       }
     }
   }
 
-  public firePlayer1() {
+  public setWeaponMode(mode: WeaponMode) {
+    if (this.player1.unlockedWeaponModes.includes(mode)) {
+      this.player1.weaponMode = mode;
+      this.player1.isLaserActive = false;
+      this.notifyChange();
+    }
+  }
+
+  public cycleWeaponMode(direction: 1 | -1 = 1) {
+    const modes = this.player1.unlockedWeaponModes;
+    if (modes.length <= 1) return;
+    const currIdx = modes.indexOf(this.player1.weaponMode);
+    const nextIdx = (currIdx + direction + modes.length) % modes.length;
+    this.player1.weaponMode = modes[nextIdx];
+    this.player1.isLaserActive = false;
     soundEngine.playSound(SoundType.SHOOT);
+    this.notifyChange();
+  }
+
+  public firePlayer1() {
     const p = this.player1;
+    if (p.lives <= 0) return;
+
+    if (p.weaponMode === WeaponMode.LASER_BEAM) {
+      // Laser Beam mode
+      if (p.weaponEnergy > 2) {
+        p.isLaserActive = true;
+        p.weaponEnergy = Math.max(0, p.weaponEnergy - 0.4);
+        this.laserSoundTimer++;
+        if (this.laserSoundTimer % 7 === 0) {
+          soundEngine.playSound(SoundType.LASER);
+        }
+      } else {
+        p.isLaserActive = false;
+        // Low energy fallback to standard pulse
+        this.fireStandardBlaster(p);
+      }
+      return;
+    }
+
+    // Projectile weapons
+    p.isLaserActive = false;
+
+    if (p.weaponMode === WeaponMode.TRIPLE_SHOT) {
+      this.fireTripleShot(p);
+      p.weaponEnergy = Math.max(0, p.weaponEnergy - 1.2);
+    } else if (p.weaponMode === WeaponMode.PLASMA_SPREAD) {
+      this.firePlasmaSpread(p);
+      p.weaponEnergy = Math.max(0, p.weaponEnergy - 1.8);
+    } else {
+      this.fireStandardBlaster(p);
+    }
+  }
+
+  private fireStandardBlaster(p: PlayerState) {
+    soundEngine.playSound(SoundType.SHOOT);
     const lvl = p.weaponLevel;
 
     if (lvl === 1) {
       this.bullets.push({
         x: p.x + p.width / 2,
         y: p.y,
+        vx: 0,
         vy: -11,
         isFromPlayer: true,
+        color: '#41f0ff',
       });
     } else if (lvl === 2) {
       this.bullets.push({
         x: p.x + 8,
         y: p.y,
+        vx: 0,
         vy: -11,
         isFromPlayer: true,
+        color: '#41f0ff',
       });
       this.bullets.push({
         x: p.x + p.width - 8,
         y: p.y,
+        vx: 0,
         vy: -11,
         isFromPlayer: true,
+        color: '#41f0ff',
       });
     } else {
       this.bullets.push({
         x: p.x + p.width / 2,
         y: p.y - 4,
+        vx: 0,
         vy: -11,
         isFromPlayer: true,
+        color: '#41f0ff',
       });
       this.bullets.push({
         x: p.x + 2,
         y: p.y,
+        vx: 0,
         vy: -11,
         isFromPlayer: true,
+        color: '#41f0ff',
       });
       this.bullets.push({
         x: p.x + p.width - 2,
         y: p.y,
+        vx: 0,
         vy: -11,
         isFromPlayer: true,
+        color: '#41f0ff',
       });
     }
     this.fireCooldown = Math.max(5, 12 - lvl * 2);
   }
 
-  public firePlayer2() {
-    if (!this.player2 || this.player2.lives <= 0) return;
-    soundEngine.playSound(SoundType.SHOOT);
-    const p = this.player2;
-    const lvl = p.weaponLevel;
+  private fireTripleShot(p: PlayerState) {
+    soundEngine.playSound(SoundType.TRIPLE_SHOT);
+    const cx = p.x + p.width / 2;
+    const cy = p.y;
 
-    if (lvl === 1) {
+    // 3-way fan volley
+    this.bullets.push({
+      x: cx,
+      y: cy - 4,
+      vx: 0,
+      vy: -12,
+      isFromPlayer: true,
+      color: '#fbbf24',
+      size: 5,
+    });
+    this.bullets.push({
+      x: cx - 10,
+      y: cy,
+      vx: -3.8,
+      vy: -11.5,
+      isFromPlayer: true,
+      color: '#fbbf24',
+      size: 4,
+    });
+    this.bullets.push({
+      x: cx + 10,
+      y: cy,
+      vx: 3.8,
+      vy: -11.5,
+      isFromPlayer: true,
+      color: '#fbbf24',
+      size: 4,
+    });
+
+    if (p.weaponLevel >= 3) {
+      // Upgraded Gun Level 3 fires extra wide wings
       this.bullets.push({
-        x: p.x + p.width / 2,
-        y: p.y,
-        vy: -11,
+        x: cx - 18,
+        y: cy + 4,
+        vx: -6.2,
+        vy: -10,
         isFromPlayer: true,
+        color: '#f59e0b',
+        size: 3,
       });
-    } else if (lvl === 2) {
       this.bullets.push({
-        x: p.x + 8,
-        y: p.y,
-        vy: -11,
+        x: cx + 18,
+        y: cy + 4,
+        vx: 6.2,
+        vy: -10,
         isFromPlayer: true,
-      });
-      this.bullets.push({
-        x: p.x + p.width - 8,
-        y: p.y,
-        vy: -11,
-        isFromPlayer: true,
-      });
-    } else {
-      this.bullets.push({
-        x: p.x + p.width / 2,
-        y: p.y - 4,
-        vy: -11,
-        isFromPlayer: true,
-      });
-      this.bullets.push({
-        x: p.x + 2,
-        y: p.y,
-        vy: -11,
-        isFromPlayer: true,
-      });
-      this.bullets.push({
-        x: p.x + p.width - 2,
-        y: p.y,
-        vy: -11,
-        isFromPlayer: true,
+        color: '#f59e0b',
+        size: 3,
       });
     }
-    this.secondPlayerFireCooldown = Math.max(5, 12 - lvl * 2);
+
+    this.fireCooldown = 8;
+  }
+
+  private firePlasmaSpread(p: PlayerState) {
+    soundEngine.playSound(SoundType.TRIPLE_SHOT);
+    const cx = p.x + p.width / 2;
+    const cy = p.y;
+    const angles = [-5.2, -2.6, 0, 2.6, 5.2];
+
+    for (const vx of angles) {
+      this.bullets.push({
+        x: cx,
+        y: cy,
+        vx,
+        vy: -11,
+        isFromPlayer: true,
+        color: '#c084fc',
+        size: 5,
+      });
+    }
+    this.fireCooldown = 10;
+  }
+
+  public firePlayer2() {
+    if (!this.player2 || this.player2.lives <= 0) return;
+    this.fireStandardBlaster(this.player2);
+    this.secondPlayerFireCooldown = Math.max(5, 12 - this.player2.weaponLevel * 2);
   }
 
   public addExplosion(x: number, y: number, r: number, g: number, b: number, count: number) {
@@ -619,8 +759,27 @@ export class GameEngine {
     }
   }
 
+  public addLaserSparks(x: number, y: number, colorHex: string, count = 4) {
+    if (!this.particlesEnabled) return;
+    for (let i = 0; i < count; i++) {
+      const angle = (Math.random() - 0.5) * Math.PI;
+      const speed = 2 + Math.random() * 4;
+      this.particles.push({
+        x: x + (Math.random() - 0.5) * 10,
+        y: y + (Math.random() - 0.5) * 6,
+        vx: Math.sin(angle) * speed,
+        vy: Math.cos(angle) * speed,
+        r: colorHex === '#ff37a6' ? 255 : 251,
+        g: colorHex === '#ff37a6' ? 70 : 191,
+        b: colorHex === '#ff37a6' ? 180 : 36,
+        life: 14,
+        maxLife: 14,
+        size: 2.5 + Math.random() * 2,
+      });
+    }
+  }
+
   public update() {
-    // Background starfield update
     for (const star of this.stars) {
       star.y += star.speed;
       if (star.y > GAME_HEIGHT) {
@@ -629,8 +788,14 @@ export class GameEngine {
       }
     }
 
+    if (this.weaponAnnouncement) {
+      this.weaponAnnouncement.timer -= 1;
+      if (this.weaponAnnouncement.timer <= 0) {
+        this.weaponAnnouncement = null;
+      }
+    }
+
     if (this.gameState !== GameState.PLAYING) {
-      // In menu screens, update ambient particles
       this.updateParticles();
       return;
     }
@@ -645,10 +810,22 @@ export class GameEngine {
       this.player1.x = Math.min(GAME_WIDTH - this.player1.width - 10, this.player1.x + PLAYER_SPEED);
     }
 
-    // Player 1 continuous fire
+    // Passive weapon energy regeneration (+0.08 per frame up to 100)
+    if (this.player1.weaponEnergy < MAX_WEAPON_ENERGY) {
+      this.player1.weaponEnergy = Math.min(MAX_WEAPON_ENERGY, this.player1.weaponEnergy + 0.08);
+    }
+
+    // Player 1 firing
     if (this.fireCooldown > 0) this.fireCooldown--;
-    if (this.spaceHeld && this.fireCooldown === 0 && this.player1.lives > 0) {
-      this.firePlayer1();
+
+    if (this.spaceHeld && this.player1.lives > 0) {
+      if (this.player1.weaponMode === WeaponMode.LASER_BEAM) {
+        this.firePlayer1();
+      } else if (this.fireCooldown === 0) {
+        this.firePlayer1();
+      }
+    } else {
+      this.player1.isLaserActive = false;
     }
 
     // Player 2 movement & fire
@@ -665,11 +842,12 @@ export class GameEngine {
       }
     }
 
-    // Bullets movement
+    // Bullets movement (with horizontal angle vx)
     for (let i = this.bullets.length - 1; i >= 0; i--) {
       const b = this.bullets[i];
+      b.x += b.vx || 0;
       b.y += b.vy;
-      if (b.y < -20 || b.y > GAME_HEIGHT + 20) {
+      if (b.y < -20 || b.y > GAME_HEIGHT + 20 || b.x < -20 || b.x > GAME_WIDTH + 20) {
         this.bullets.splice(i, 1);
       }
     }
@@ -704,6 +882,7 @@ export class GameEngine {
         this.bullets.push({
           x: e.x + ENEMY_WIDTH / 2,
           y: e.y + ENEMY_HEIGHT,
+          vx: 0,
           vy: 5 + diff.enemySpeedMultiplier,
           isFromPlayer: false,
         });
@@ -728,16 +907,19 @@ export class GameEngine {
       }
     }
 
-    // Powerups update
+    // Power-up tokens update with sway bobbing
     for (let i = this.powerUps.length - 1; i >= 0; i--) {
       const p = this.powerUps[i];
-      p.y += 2.2;
-      if (p.y > GAME_HEIGHT) {
+      p.bobAngle += 0.05;
+      p.x += Math.sin(p.bobAngle) * 0.6;
+      p.y += p.speed;
+      if (p.y > GAME_HEIGHT + 30) {
         this.powerUps.splice(i, 1);
       }
     }
 
     // Resolve Collisions
+    this.resolveLaserBeamHits();
     this.resolveBulletHits();
     this.resolveEnemyAndHazardCollisions();
     this.resolvePowerUpCollisions();
@@ -751,6 +933,73 @@ export class GameEngine {
     }
   }
 
+  private resolveLaserBeamHits() {
+    if (!this.player1.isLaserActive || this.player1.lives <= 0) return;
+
+    const laserX = this.player1.x + this.player1.width / 2;
+    const laserTop = 0;
+    const laserBottom = this.player1.y;
+
+    // Laser vs Bombs
+    for (let bmi = this.bombs.length - 1; bmi >= 0; bmi--) {
+      const bomb = this.bombs[bmi];
+      const bombCenterX = bomb.x + 12;
+      const bombCenterY = bomb.y + 12;
+
+      if (
+        Math.abs(bombCenterX - laserX) < LASER_BEAM_WIDTH / 2 + 12 &&
+        bombCenterY >= laserTop &&
+        bombCenterY <= laserBottom
+      ) {
+        this.addLaserSparks(laserX, bombCenterY, '#ff37a6', 5);
+        this.bombs.splice(bmi, 1);
+        this.addExplosion(bomb.x + 12, bomb.y + 12, 255, 70, 80, 40);
+        soundEngine.playSound(SoundType.EXPLOSION);
+        this.incrementProgress('bomb_defuser', 1);
+      }
+    }
+
+    // Laser vs Enemies
+    for (let ei = this.enemies.length - 1; ei >= 0; ei--) {
+      const enemy = this.enemies[ei];
+      const enemyCenterX = enemy.x + 16;
+      const enemyCenterY = enemy.y + 16;
+
+      if (
+        Math.abs(enemyCenterX - laserX) < LASER_BEAM_WIDTH / 2 + 16 &&
+        enemyCenterY >= laserTop &&
+        enemyCenterY <= laserBottom
+      ) {
+        // High-energy cutting ticks
+        this.addLaserSparks(laserX, enemyCenterY, '#ff37a6', 3);
+        enemy.hp -= 0.35;
+
+        if (enemy.hp <= 0) {
+          const cfg = ENEMY_CONFIGS[enemy.type];
+          this.enemies.splice(ei, 1);
+          this.addExplosion(enemy.x + 16, enemy.y + 16, 255, 55, 166, 30);
+          soundEngine.playSound(SoundType.EXPLOSION);
+
+          this.player1.score += cfg.score;
+          this.credits += cfg.credits;
+          this.profileScore += cfg.score;
+          this.highScore = Math.max(this.highScore, this.player1.score);
+
+          if (enemy.type === EnemyType.ELITE) {
+            this.incrementProgress('elite_hunter', 1);
+            this.incrementProgress('boss_slayer', 1);
+          }
+
+          if (this.player1.score >= 3000) {
+            this.unlockAchievement('high_roller');
+          }
+
+          this.dropTokenAt(enemy.x, enemy.y, enemy.type === EnemyType.ELITE);
+        }
+      }
+    }
+  }
+
   private resolveBulletHits() {
     for (let bi = this.bullets.length - 1; bi >= 0; bi--) {
       const b = this.bullets[bi];
@@ -761,14 +1010,12 @@ export class GameEngine {
       // Check bomb hits
       for (let bmi = this.bombs.length - 1; bmi >= 0; bmi--) {
         const bomb = this.bombs[bmi];
-        if (this.intersects(b.x - 3, b.y, 6, 12, bomb.x, bomb.y, BOMB_SIZE, BOMB_SIZE)) {
+        if (this.intersects(b.x - 4, b.y, 8, 14, bomb.x, bomb.y, BOMB_SIZE, BOMB_SIZE)) {
           this.bullets.splice(bi, 1);
           this.bombs.splice(bmi, 1);
           this.addExplosion(bomb.x + 12, bomb.y + 12, 255, 70, 80, 45);
           soundEngine.playSound(SoundType.EXPLOSION);
           bulletHit = true;
-
-          // Achievement progression
           this.incrementProgress('bomb_defuser', 1);
           break;
         }
@@ -778,39 +1025,71 @@ export class GameEngine {
       // Check enemy hits
       for (let ei = this.enemies.length - 1; ei >= 0; ei--) {
         const enemy = this.enemies[ei];
-        if (this.intersects(b.x - 3, b.y, 6, 12, enemy.x, enemy.y, ENEMY_WIDTH, ENEMY_HEIGHT)) {
+        if (this.intersects(b.x - 4, b.y, 8, 14, enemy.x, enemy.y, ENEMY_WIDTH, ENEMY_HEIGHT)) {
           this.bullets.splice(bi, 1);
-          this.enemies.splice(ei, 1);
-          const cfg = ENEMY_CONFIGS[enemy.type];
-          this.addExplosion(enemy.x + 16, enemy.y + 16, 255, 0, 255, 25);
-          soundEngine.playSound(SoundType.EXPLOSION);
+          enemy.hp -= 1;
 
-          this.player1.score += cfg.score;
-          this.credits += cfg.credits;
-          this.profileScore += cfg.score;
-          this.highScore = Math.max(this.highScore, this.player1.score);
+          if (enemy.hp <= 0) {
+            this.enemies.splice(ei, 1);
+            const cfg = ENEMY_CONFIGS[enemy.type];
+            this.addExplosion(enemy.x + 16, enemy.y + 16, 255, 0, 255, 25);
+            soundEngine.playSound(SoundType.EXPLOSION);
 
-          // Achievements trigger
-          if (enemy.type === EnemyType.ELITE) {
-            this.incrementProgress('elite_hunter', 1);
-            this.incrementProgress('boss_slayer', 1);
-          }
+            this.player1.score += cfg.score;
+            this.credits += cfg.credits;
+            this.profileScore += cfg.score;
+            this.highScore = Math.max(this.highScore, this.player1.score);
 
-          if (this.player1.score >= 3000) {
-            this.unlockAchievement('high_roller');
-          }
+            if (enemy.type === EnemyType.ELITE) {
+              this.incrementProgress('elite_hunter', 1);
+              this.incrementProgress('boss_slayer', 1);
+            }
 
-          if (Math.random() < 0.1) {
-            this.powerUps.push({
-              x: enemy.x,
-              y: enemy.y,
-              type: Math.random() < 0.5 ? PowerUpType.EXTRA_LIFE : PowerUpType.WEAPON,
-            });
+            if (this.player1.score >= 3000) {
+              this.unlockAchievement('high_roller');
+            }
+
+            this.dropTokenAt(enemy.x, enemy.y, enemy.type === EnemyType.ELITE);
+          } else {
+            // Hit spark on armored enemy
+            this.addLaserSparks(enemy.x + 16, enemy.y + 16, '#37f5ff', 3);
           }
           break;
         }
       }
     }
+  }
+
+  private dropTokenAt(x: number, y: number, isElite: boolean) {
+    const chance = isElite ? 0.45 : 0.14;
+    if (Math.random() >= chance) return;
+
+    // Token distribution
+    const roll = Math.random();
+    let type: PowerUpType;
+
+    if (isElite) {
+      // Elites drop high-tier weapon tokens!
+      if (roll < 0.38) type = PowerUpType.TOKEN_LASER_BEAM;
+      else if (roll < 0.68) type = PowerUpType.TOKEN_TRIPLE_SHOT;
+      else if (roll < 0.85) type = PowerUpType.TOKEN_PLASMA_SPREAD;
+      else type = PowerUpType.EXTRA_LIFE;
+    } else {
+      if (roll < 0.28) type = PowerUpType.TOKEN_TRIPLE_SHOT;
+      else if (roll < 0.48) type = PowerUpType.TOKEN_LASER_BEAM;
+      else if (roll < 0.65) type = PowerUpType.TOKEN_PLASMA_SPREAD;
+      else if (roll < 0.82) type = PowerUpType.SHIELD_BOOST;
+      else if (roll < 0.93) type = PowerUpType.WEAPON;
+      else type = PowerUpType.EXTRA_LIFE;
+    }
+
+    this.powerUps.push({
+      x,
+      y,
+      type,
+      bobAngle: Math.random() * Math.PI * 2,
+      speed: 1.8 + Math.random() * 0.6,
+    });
   }
 
   private resolveEnemyAndHazardCollisions() {
@@ -859,7 +1138,6 @@ export class GameEngine {
       }
     }
 
-    // Check game over
     const p1Dead = this.player1.lives <= 0;
     const p2Dead = !this.twoPlayerMode || !this.player2 || this.player2.lives <= 0;
     if (p1Dead && p2Dead && this.gameState === GameState.PLAYING) {
@@ -897,21 +1175,96 @@ export class GameEngine {
       if (player.lives <= 0) continue;
       for (let pi = this.powerUps.length - 1; pi >= 0; pi--) {
         const p = this.powerUps[pi];
-        if (this.intersects(p.x, p.y, POWERUP_SIZE, POWERUP_SIZE, player.x, player.y, player.width, player.height)) {
+        if (this.intersects(p.x, p.y, POWERUP_TOKEN_SIZE, POWERUP_TOKEN_SIZE, player.x, player.y, player.width, player.height)) {
           this.powerUps.splice(pi, 1);
-          soundEngine.playSound(SoundType.POWER_UP);
 
-          // Power surge achievement tracking
           this.incrementProgress('power_surge', 1);
 
-          if (p.type === PowerUpType.EXTRA_LIFE) {
+          if (p.type === PowerUpType.TOKEN_TRIPLE_SHOT) {
+            if (!player.unlockedWeaponModes.includes(WeaponMode.TRIPLE_SHOT)) {
+              player.unlockedWeaponModes.push(WeaponMode.TRIPLE_SHOT);
+            }
+            player.weaponMode = WeaponMode.TRIPLE_SHOT;
+            player.weaponEnergy = MAX_WEAPON_ENERGY;
+            player.isLaserActive = false;
+
+            this.weaponAnnouncement = {
+              title: '🔱 TRIPLE SHOT ENGAGED!',
+              subtitle: '3-Way Angled Fan Cannons Activated',
+              color: '#fbbf24',
+              timer: 130,
+              maxTimer: 130,
+            };
+            this.unlockAchievement('triple_threat');
+            soundEngine.playSound(SoundType.TOKEN_COLLECT);
+          } else if (p.type === PowerUpType.TOKEN_LASER_BEAM) {
+            if (!player.unlockedWeaponModes.includes(WeaponMode.LASER_BEAM)) {
+              player.unlockedWeaponModes.push(WeaponMode.LASER_BEAM);
+            }
+            player.weaponMode = WeaponMode.LASER_BEAM;
+            player.weaponEnergy = MAX_WEAPON_ENERGY;
+
+            this.weaponAnnouncement = {
+              title: '⚡ HYPER LASER BEAM ENGAGED!',
+              subtitle: 'Piercing Coherent Laser Column Activated',
+              color: '#ff37a6',
+              timer: 130,
+              maxTimer: 130,
+            };
+            this.unlockAchievement('laser_master');
+            soundEngine.playSound(SoundType.TOKEN_COLLECT);
+          } else if (p.type === PowerUpType.TOKEN_PLASMA_SPREAD) {
+            if (!player.unlockedWeaponModes.includes(WeaponMode.PLASMA_SPREAD)) {
+              player.unlockedWeaponModes.push(WeaponMode.PLASMA_SPREAD);
+            }
+            player.weaponMode = WeaponMode.PLASMA_SPREAD;
+            player.weaponEnergy = MAX_WEAPON_ENERGY;
+            player.isLaserActive = false;
+
+            this.weaponAnnouncement = {
+              title: '🔮 PLASMA SPREAD ENGAGED!',
+              subtitle: '5-Way Heavy Disruption Bolts Activated',
+              color: '#c084fc',
+              timer: 130,
+              maxTimer: 130,
+            };
+            soundEngine.playSound(SoundType.TOKEN_COLLECT);
+          } else if (p.type === PowerUpType.SHIELD_BOOST) {
+            player.shield = MAX_SHIELD;
+            this.weaponAnnouncement = {
+              title: '🛡️ MAXIMUM SHIELD RESTORED',
+              subtitle: 'Deflector System Overcharged to 100%',
+              color: '#38bdf8',
+              timer: 100,
+              maxTimer: 100,
+            };
+            soundEngine.playSound(SoundType.POWER_UP);
+          } else if (p.type === PowerUpType.EXTRA_LIFE) {
             player.lives += 1;
+            this.weaponAnnouncement = {
+              title: '❤️ EXTRA PILOT LIFE ACQUIRED',
+              subtitle: 'Hull Backup Unit Online',
+              color: '#4ade80',
+              timer: 100,
+              maxTimer: 100,
+            };
+            soundEngine.playSound(SoundType.POWER_UP);
           } else if (p.type === PowerUpType.WEAPON) {
             player.weaponLevel = Math.min(3, player.weaponLevel + 1);
             if (player.weaponLevel >= 3) {
               this.unlockAchievement('full_arsenal');
             }
+            this.weaponAnnouncement = {
+              title: `⭐ CANNON LEVEL ${player.weaponLevel}`,
+              subtitle: 'Primary Firepower Tier Upgraded',
+              color: '#22d3ee',
+              timer: 100,
+              maxTimer: 100,
+            };
+            soundEngine.playSound(SoundType.POWER_UP);
           }
+
+          this.notifyChange();
         }
       }
     }

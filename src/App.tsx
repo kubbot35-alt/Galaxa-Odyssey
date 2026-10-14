@@ -2,9 +2,20 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { GameEngine } from './game/GameEngine';
 import { GameCanvas } from './components/GameCanvas';
 import { TouchControls } from './components/TouchControls';
+import { Modern3DMenu } from './components/Modern3DMenu';
 import { AchievementsOverlay } from './components/AchievementsOverlay';
 import { AchievementToast } from './components/AchievementToast';
-import { Volume2, VolumeX, Sparkles, Maximize2, RotateCcw, Trophy } from 'lucide-react';
+import { soundEngine } from './audio/soundEngine';
+import { GameState } from './types/game';
+import {
+  Volume2,
+  VolumeX,
+  Sparkles,
+  Maximize2,
+  RotateCcw,
+  Trophy,
+  Compass,
+} from 'lucide-react';
 
 export const App: React.FC = () => {
   const [, setTick] = useState(0);
@@ -13,6 +24,7 @@ export const App: React.FC = () => {
   const engine = useMemo(() => new GameEngine(forceUpdate), []);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [use3DMenu, setUse3DMenu] = useState(true);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -32,6 +44,15 @@ export const App: React.FC = () => {
     return () => document.removeEventListener('fullscreenchange', handleFsChange);
   }, []);
 
+  const isMenuState = [
+    GameState.MENU,
+    GameState.PLAYER_MODE_SELECTION,
+    GameState.DIFFICULTY_SELECTION,
+    GameState.UPGRADES,
+    GameState.SETTINGS,
+    GameState.HOW_TO_PLAY,
+  ].includes(engine.gameState);
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-between p-2 sm:p-4 selection:bg-cyan-500 selection:text-black">
       {/* Top Bar Header */}
@@ -44,15 +65,34 @@ export const App: React.FC = () => {
             <h1 className="text-sm sm:text-base font-black tracking-wider text-cyan-400 font-mono">
               GALAXA ODYSSEY
             </h1>
-            <p className="text-[10px] text-slate-400">Futuristic Arcade Space Shooter</p>
+            <p className="text-[10px] text-slate-400">21st-Century Orbital Fighter & Combat Defense</p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
+          {/* 3D / Retro Menu Mode Toggle */}
+          <button
+            type="button"
+            onClick={() => {
+              soundEngine.playUiClick();
+              setUse3DMenu((prev) => !prev);
+            }}
+            title="Toggle Menu View: 21st-Century 3D Hangar vs Retro 80s"
+            className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-mono font-bold transition shadow-sm ${
+              use3DMenu
+                ? 'bg-cyan-950/70 border-cyan-400/60 text-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.3)]'
+                : 'bg-amber-950/60 border-amber-500/50 text-amber-300'
+            }`}
+          >
+            <Compass size={14} className={use3DMenu ? 'text-cyan-400' : 'text-amber-400'} />
+            <span>{use3DMenu ? '3D VIEW' : '80S RETRO'}</span>
+          </button>
+
           {/* Achievement Badges Trigger */}
           <button
             type="button"
             onClick={() => {
+              soundEngine.playUiClick();
               engine.toggleAchievements();
               forceUpdate();
             }}
@@ -132,10 +172,21 @@ export const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Main Canvas Area */}
+      {/* Main Game / Menu Area */}
       <main className="relative w-full flex flex-col items-center justify-center flex-1 my-auto">
-        <GameCanvas engine={engine} onStateUpdate={forceUpdate} />
-        <TouchControls engine={engine} onStateUpdate={forceUpdate} />
+        {isMenuState && use3DMenu ? (
+          <Modern3DMenu
+            engine={engine}
+            onLaunch={forceUpdate}
+            onStateUpdate={forceUpdate}
+            onSwitchToRetro={() => setUse3DMenu(false)}
+          />
+        ) : (
+          <>
+            <GameCanvas engine={engine} onStateUpdate={forceUpdate} />
+            <TouchControls engine={engine} onStateUpdate={forceUpdate} />
+          </>
+        )}
 
         {/* Real-time Achievement Toast */}
         <AchievementToast
@@ -164,6 +215,8 @@ export const App: React.FC = () => {
           <span className="text-cyan-400 font-mono font-semibold">Controls:</span>
           <span>P1: ← / → + Space</span>
           <span className="text-slate-600">|</span>
+          <span>Weapons: 1-4 / Q, E</span>
+          <span className="text-slate-600">|</span>
           <span>P2: A / D + F</span>
           <span className="text-slate-600">|</span>
           <span>Badges: B</span>
@@ -171,7 +224,7 @@ export const App: React.FC = () => {
           <span>Pause: ESC</span>
         </div>
         <div className="text-slate-500 font-mono text-[10px]">
-          Galaxa Odyssey v1.1 • Achievement Badge System Active
+          Galaxa Odyssey 21st-Century Edition • 3D Hangar Active
         </div>
       </footer>
     </div>

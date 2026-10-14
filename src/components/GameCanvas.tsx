@@ -1,14 +1,17 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { GameEngine } from '../game/GameEngine';
+import { GameEngine, PowerUp, PlayerState, Enemy } from '../game/GameEngine';
 import {
   GameState,
   DifficultyLevel,
   DIFFICULTY_CONFIGS,
   EnemyType,
   PowerUpType,
+  WeaponMode,
+  WEAPON_MODE_CONFIGS,
   UpgradeOption,
   UPGRADE_CONFIGS,
   SettingsOption,
+  SoundType,
 } from '../types/game';
 import {
   GAME_WIDTH,
@@ -16,8 +19,10 @@ import {
   ENEMY_WIDTH,
   ENEMY_HEIGHT,
   BOMB_SIZE,
-  POWERUP_SIZE,
+  POWERUP_TOKEN_SIZE,
   MAX_SHIELD,
+  MAX_WEAPON_ENERGY,
+  LASER_BEAM_WIDTH,
 } from '../game/constants';
 import { soundEngine } from '../audio/soundEngine';
 
@@ -85,7 +90,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, onStateUpdate })
     return () => cancelAnimationFrame(animId);
   }, [engine, imagesLoaded]);
 
-  // Click & Mouse interaction for Menu, Upgrades, Settings, etc.
+  // Click & Mouse interaction for Menu, Upgrades, Settings, Weapon Switching, etc.
   const handleCanvasClick = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       if (engine.isAchievementsOpen) return;
@@ -97,6 +102,28 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, onStateUpdate })
       const scaleY = GAME_HEIGHT / rect.height;
       const x = (e.clientX - rect.left) * scaleX;
       const y = (e.clientY - rect.top) * scaleY;
+
+      // Handle weapon selector clicks during gameplay
+      if (engine.gameState === GameState.PLAYING) {
+        // Weapon Selector pills in HUD: y: 58..82, starting around x: 315
+        if (y >= 56 && y <= 82) {
+          const unlocked = engine.player1.unlockedWeaponModes;
+          let currentX = 315;
+          for (let i = 0; i < unlocked.length; i++) {
+            const mode = unlocked[i];
+            const cfg = WEAPON_MODE_CONFIGS[mode];
+            const width = 80;
+            if (x >= currentX && x <= currentX + width) {
+              engine.setWeaponMode(mode);
+              soundEngine.playSound(SoundType.SHOOT);
+              onStateUpdate();
+              return;
+            }
+            currentX += width + 6;
+          }
+        }
+        return;
+      }
 
       // Handle interactions per game state
       if (engine.gameState === GameState.MENU) {
@@ -211,19 +238,14 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, onStateUpdate })
     }
 
     if (action === 0) {
-      // Start Mission -> Mode Select
       engine.gameState = GameState.PLAYER_MODE_SELECTION;
     } else if (action === 1) {
-      // Achievement Badges
       engine.openAchievements();
     } else if (action === 2) {
-      // Ship Upgrades
       engine.gameState = GameState.UPGRADES;
     } else if (action === 3) {
-      // Settings
       engine.gameState = GameState.SETTINGS;
     } else if (action === 4) {
-      // How To Play
       engine.gameState = GameState.HOW_TO_PLAY;
     }
     onStateUpdate();
@@ -232,12 +254,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, onStateUpdate })
   // Keyboard navigation & controls
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Global Audio resume on first user interaction
       if (engine.soundEnabled && engine.gameState === GameState.MENU) {
         soundEngine.startMenuMusic();
       }
 
-      // Achievement modal escape handling
       if (engine.isAchievementsOpen) {
         if (e.key === 'Escape' || e.key === 'b' || e.key === 'B') {
           engine.closeAchievements();
@@ -246,11 +266,33 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, onStateUpdate })
         return;
       }
 
-      // Quick toggle achievements with 'B' in Menu
       if ((e.key === 'b' || e.key === 'B') && engine.gameState === GameState.MENU) {
         engine.toggleAchievements();
         onStateUpdate();
         return;
+      }
+
+      // In-game weapon mode switching
+      if (engine.gameState === GameState.PLAYING) {
+        if (e.key === '1') {
+          engine.setWeaponMode(WeaponMode.STANDARD);
+          onStateUpdate();
+        } else if (e.key === '2') {
+          engine.setWeaponMode(WeaponMode.TRIPLE_SHOT);
+          onStateUpdate();
+        } else if (e.key === '3') {
+          engine.setWeaponMode(WeaponMode.LASER_BEAM);
+          onStateUpdate();
+        } else if (e.key === '4') {
+          engine.setWeaponMode(WeaponMode.PLASMA_SPREAD);
+          onStateUpdate();
+        } else if (e.key === 'q' || e.key === 'Q') {
+          engine.cycleWeaponMode(-1);
+          onStateUpdate();
+        } else if (e.key === 'e' || e.key === 'E') {
+          engine.cycleWeaponMode(1);
+          onStateUpdate();
+        }
       }
 
       if (e.key === 'ArrowLeft') {
@@ -375,6 +417,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, onStateUpdate })
         engine.player1.movingRight = false;
       } else if (e.key === ' ' || e.code === 'Space') {
         engine.spaceHeld = false;
+        engine.player1.isLaserActive = false;
       }
 
       if (e.key === 'a' || e.key === 'A') {
@@ -474,31 +517,42 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, onStateUpdate })
   };
 
   const renderGameplay = (ctx: CanvasRenderingContext2D) => {
-    // Draw Player 1
+    // 1. Draw Laser Beam if active
+    if (engine.player1.isLaserActive && engine.player1.lives > 0) {
+      drawLaserBeam(ctx, engine.player1.x + engine.player1.width / 2, engine.player1.y);
+    }
+
+    // 2. Draw Player 1
     if (engine.player1.lives > 0) {
       drawPlayerShip(ctx, engine.player1, player1Img.current, '#37f5ff');
     }
 
-    // Draw Player 2
+    // 3. Draw Player 2
     if (engine.twoPlayerMode && engine.player2 && engine.player2.lives > 0) {
       drawPlayerShip(ctx, engine.player2, player2Img.current, '#ff5fb4');
     }
 
-    // Draw Bullets
+    // 4. Draw Bullets
     for (const b of engine.bullets) {
-      const color = b.isFromPlayer ? '#41f0ff' : '#ff4b91';
-      ctx.fillStyle = b.isFromPlayer ? 'rgba(65, 240, 255, 0.3)' : 'rgba(255, 75, 145, 0.3)';
-      ctx.beginPath();
-      ctx.ellipse(b.x, b.y + 6, 4, 10, 0, 0, Math.PI * 2);
-      ctx.fill();
+      const color = b.color || (b.isFromPlayer ? '#41f0ff' : '#ff4b91');
+      const size = b.size || 4;
 
       ctx.fillStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 8;
       ctx.beginPath();
-      ctx.roundRect(b.x - 2, b.y, 4, 12, 2);
+      ctx.ellipse(b.x, b.y + 6, size, size * 2.2, (b.vx || 0) * 0.05, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Inner bright core
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(b.x, b.y + 6, size * 0.4, size * 1.2, (b.vx || 0) * 0.05, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // Draw Bombs
+    // 5. Draw Bombs
     for (const bomb of engine.bombs) {
       ctx.fillStyle = 'rgba(255, 55, 85, 0.25)';
       ctx.beginPath();
@@ -522,44 +576,171 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, onStateUpdate })
       ctx.fill();
     }
 
-    // Draw Enemies
+    // 6. Draw Enemies
     for (const e of engine.enemies) {
       drawEnemy(ctx, e);
     }
 
-    // Draw PowerUps
+    // 7. Draw Power-Up Tokens
     for (const p of engine.powerUps) {
-      const color = p.type === PowerUpType.EXTRA_LIFE ? '#4bffb4' : '#b473ff';
-      const label = p.type === PowerUpType.EXTRA_LIFE ? 'L' : 'W';
-
-      ctx.fillStyle = p.type === PowerUpType.EXTRA_LIFE ? 'rgba(75, 255, 180, 0.2)' : 'rgba(180, 115, 255, 0.2)';
-      ctx.beginPath();
-      ctx.arc(p.x + 11, p.y + 11, 16, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#12193c';
-      ctx.beginPath();
-      ctx.roundRect(p.x, p.y, POWERUP_SIZE, POWERUP_SIZE, 6);
-      ctx.fill();
-
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      ctx.fillStyle = color;
-      ctx.font = 'bold 13px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(label, p.x + 11, p.y + 11);
+      drawPowerUpToken(ctx, p);
     }
 
-    // HUD Header
+    // 8. Draw In-Game Weapon Pickup Announcement Banner
+    if (engine.weaponAnnouncement) {
+      const wa = engine.weaponAnnouncement;
+      const alpha = Math.min(1, wa.timer / 25);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      ctx.fillStyle = 'rgba(8, 15, 42, 0.92)';
+      ctx.beginPath();
+      ctx.roundRect(GAME_WIDTH / 2 - 210, 88, 420, 48, 12);
+      ctx.fill();
+
+      ctx.strokeStyle = wa.color;
+      ctx.lineWidth = 2;
+      ctx.shadowColor = wa.color;
+      ctx.shadowBlur = 15;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = wa.color;
+      ctx.font = '900 16px Orbitron, Rajdhani, sans-serif';
+      ctx.fillText(wa.title, GAME_WIDTH / 2, 104);
+
+      ctx.fillStyle = '#e2e8f0';
+      ctx.font = '600 12px Rajdhani, sans-serif';
+      ctx.fillText(wa.subtitle, GAME_WIDTH / 2, 122);
+
+      ctx.restore();
+    }
+
+    // 9. HUD Header & Weapon Selector
     renderHud(ctx);
+  };
+
+  const drawLaserBeam = (ctx: CanvasRenderingContext2D, x: number, y: number) => {
+    ctx.save();
+
+    // 1. Outer high-energy glow
+    const outerGrad = ctx.createLinearGradient(x - 24, 0, x + 24, 0);
+    outerGrad.addColorStop(0, 'rgba(255, 55, 166, 0)');
+    outerGrad.addColorStop(0.5, 'rgba(255, 55, 166, 0.45)');
+    outerGrad.addColorStop(1, 'rgba(255, 55, 166, 0)');
+    ctx.fillStyle = outerGrad;
+    ctx.fillRect(x - 24, 0, 48, y);
+
+    // 2. Mid laser column
+    const midGrad = ctx.createLinearGradient(x - 8, 0, x + 8, 0);
+    midGrad.addColorStop(0, 'rgba(255, 120, 220, 0.3)');
+    midGrad.addColorStop(0.5, 'rgba(255, 70, 180, 0.9)');
+    midGrad.addColorStop(1, 'rgba(255, 120, 220, 0.3)');
+    ctx.fillStyle = midGrad;
+    ctx.fillRect(x - 8, 0, 16, y);
+
+    // 3. Ultra-hot pure white laser core
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = '#ff37a6';
+    ctx.shadowBlur = 14;
+    ctx.fillRect(x - 2.5, 0, 5, y);
+    ctx.shadowBlur = 0;
+
+    // 4. Ship emitter lens glow
+    ctx.fillStyle = '#ff7dc8';
+    ctx.beginPath();
+    ctx.arc(x, y + 2, 8, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(x, y + 2, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  };
+
+  const drawPowerUpToken = (ctx: CanvasRenderingContext2D, p: PowerUp) => {
+    let color = '#37f5ff';
+    let iconLabel = 'W';
+    let badgeTitle = 'GUN';
+
+    switch (p.type) {
+      case PowerUpType.TOKEN_TRIPLE_SHOT:
+        color = '#fbbf24';
+        iconLabel = '3X';
+        badgeTitle = 'TRIPLE';
+        break;
+      case PowerUpType.TOKEN_LASER_BEAM:
+        color = '#ff37a6';
+        iconLabel = '⚡';
+        badgeTitle = 'LASER';
+        break;
+      case PowerUpType.TOKEN_PLASMA_SPREAD:
+        color = '#c084fc';
+        iconLabel = 'SPR';
+        badgeTitle = 'SPREAD';
+        break;
+      case PowerUpType.SHIELD_BOOST:
+        color = '#38bdf8';
+        iconLabel = '🛡️';
+        badgeTitle = 'SHIELD';
+        break;
+      case PowerUpType.EXTRA_LIFE:
+        color = '#4ade80';
+        iconLabel = '♥';
+        badgeTitle = '+LIFE';
+        break;
+      case PowerUpType.WEAPON:
+      default:
+        color = '#22d3ee';
+        iconLabel = '⭐';
+        badgeTitle = 'CANNON';
+        break;
+    }
+
+    const cx = p.x + POWERUP_TOKEN_SIZE / 2;
+    const cy = p.y + POWERUP_TOKEN_SIZE / 2;
+
+    // Pulsing outer aura
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.22;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1.0;
+
+    // Cyber token body
+    ctx.fillStyle = '#090f28';
+    ctx.beginPath();
+    ctx.roundRect(p.x, p.y, POWERUP_TOKEN_SIZE, POWERUP_TOKEN_SIZE, 8);
+    ctx.fill();
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 8;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Icon & Label
+    ctx.fillStyle = color;
+    ctx.font = 'bold 12px Orbitron, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(iconLabel, cx, cy - 1);
+
+    // Mini sub-label
+    ctx.font = 'bold 8px Rajdhani, sans-serif';
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillText(badgeTitle, cx, cy + 9);
   };
 
   const drawPlayerShip = (
     ctx: CanvasRenderingContext2D,
-    p: { x: number; y: number; width: number; height: number; shield: number },
+    p: PlayerState,
     img: HTMLImageElement | null,
     glowColor: string
   ) => {
@@ -581,7 +762,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, onStateUpdate })
     if (img && img.complete && img.naturalWidth > 0) {
       ctx.drawImage(img, p.x - 6, p.y - 9, 60, 66);
     } else {
-      // Procedural fallback ship
       ctx.fillStyle = glowColor;
       ctx.beginPath();
       ctx.moveTo(p.x + p.width / 2, p.y);
@@ -593,7 +773,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, onStateUpdate })
     }
   };
 
-  const drawEnemy = (ctx: CanvasRenderingContext2D, e: { x: number; y: number; type: EnemyType; diving: boolean }) => {
+  const drawEnemy = (ctx: CanvasRenderingContext2D, e: Enemy) => {
     const isElite = e.type === EnemyType.ELITE;
     const accent = isElite ? '#ff46af' : '#ffb441';
 
@@ -625,11 +805,19 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, onStateUpdate })
     ctx.arc(e.x + 8, e.y + 12, 2, 0, Math.PI * 2);
     ctx.arc(e.x + 24, e.y + 12, 2, 0, Math.PI * 2);
     ctx.fill();
+
+    // Elite mini health bar
+    if (isElite && e.hp < e.maxHp) {
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
+      ctx.fillRect(e.x + 4, e.y - 6, 24, 3);
+      ctx.fillStyle = '#ff46af';
+      ctx.fillRect(e.x + 4, e.y - 6, (24 * e.hp) / e.maxHp, 3);
+    }
   };
 
   const renderHud = (ctx: CanvasRenderingContext2D) => {
     // Top Cyber HUD bar
-    ctx.fillStyle = 'rgba(8, 15, 42, 0.88)';
+    ctx.fillStyle = 'rgba(8, 15, 42, 0.9)';
     ctx.beginPath();
     ctx.roundRect(16, 12, GAME_WIDTH - 32, 44, 16);
     ctx.fill();
@@ -653,46 +841,74 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, onStateUpdate })
     const livesLabel = engine.infiniteLives ? '∞' : `${engine.player1.lives}`;
     ctx.fillText(`LIVES  ${livesLabel}`, GAME_WIDTH - 36, 34);
 
-    // Shield Bar
+    // Sub-HUD Row: Shields, Gun Level, Active Weapon & Selectors
     ctx.textAlign = 'left';
-    ctx.font = 'bold 12px Rajdhani, Orbitron, sans-serif';
+    ctx.font = 'bold 11px Rajdhani, Orbitron, sans-serif';
     ctx.fillStyle = '#78ebff';
     ctx.fillText('SHIELD', 32, 70);
 
     ctx.fillStyle = 'rgba(30, 45, 75, 0.85)';
     ctx.beginPath();
-    ctx.roundRect(85, 63, 110, 10, 4);
+    ctx.roundRect(78, 63, 80, 10, 4);
     ctx.fill();
 
     const shieldPct = Math.max(0, Math.min(1, engine.player1.shield / MAX_SHIELD));
     ctx.fillStyle = '#46dcff';
     ctx.beginPath();
-    ctx.roundRect(85, 63, 110 * shieldPct, 10, 4);
+    ctx.roundRect(78, 63, 80 * shieldPct, 10, 4);
     ctx.fill();
 
-    // Weapon Level badge
-    ctx.fillStyle = 'rgba(8, 15, 42, 0.85)';
+    // Weapon Energy Bar
+    const activeCfg = WEAPON_MODE_CONFIGS[engine.player1.weaponMode];
+    ctx.fillStyle = activeCfg.color;
+    ctx.fillText('PWR', 168, 70);
+
+    ctx.fillStyle = 'rgba(30, 45, 75, 0.85)';
     ctx.beginPath();
-    ctx.roundRect(210, 60, 90, 18, 6);
+    ctx.roundRect(196, 63, 70, 10, 4);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(80, 210, 255, 0.4)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
 
-    ctx.fillStyle = '#ffeb96';
-    ctx.font = 'bold 11px Rajdhani, sans-serif';
-    ctx.fillText(`GUN LVL ${engine.player1.weaponLevel}`, 220, 71);
+    const energyPct = Math.max(0, Math.min(1, engine.player1.weaponEnergy / MAX_WEAPON_ENERGY));
+    ctx.fillStyle = activeCfg.color;
+    ctx.beginPath();
+    ctx.roundRect(196, 63, 70 * energyPct, 10, 4);
+    ctx.fill();
+
+    // Unlocked Weapon Selector Pills
+    const unlocked = engine.player1.unlockedWeaponModes;
+    let pillX = 276;
+    for (let i = 0; i < unlocked.length; i++) {
+      const mode = unlocked[i];
+      const cfg = WEAPON_MODE_CONFIGS[mode];
+      const isCurrent = engine.player1.weaponMode === mode;
+      const pillW = 86;
+
+      ctx.fillStyle = isCurrent ? cfg.glow : 'rgba(10, 18, 45, 0.85)';
+      ctx.beginPath();
+      ctx.roundRect(pillX, 58, pillW, 20, 6);
+      ctx.fill();
+
+      ctx.strokeStyle = isCurrent ? cfg.color : 'rgba(80, 210, 255, 0.3)';
+      ctx.lineWidth = isCurrent ? 1.8 : 1;
+      ctx.stroke();
+
+      ctx.fillStyle = isCurrent ? '#ffffff' : '#94a3b8';
+      ctx.font = 'bold 10px Rajdhani, Orbitron, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${i + 1}:${cfg.label}`, pillX + pillW / 2, 69);
+
+      pillX += pillW + 6;
+    }
 
     // Second player stats if active
     if (engine.twoPlayerMode && engine.player2) {
       ctx.textAlign = 'right';
       ctx.fillStyle = '#ff5fb4';
-      ctx.fillText(`P2 LIVES: ${engine.player2.lives} | SHIELD: ${engine.player2.shield}%`, GAME_WIDTH - 36, 70);
+      ctx.fillText(`P2: ${engine.player2.lives} LIVES`, GAME_WIDTH - 36, 70);
     }
   };
 
   const renderMenu = (ctx: CanvasRenderingContext2D) => {
-    // Menu background
     if (menuBgImg.current && menuBgImg.current.complete && menuBgImg.current.naturalWidth > 0) {
       ctx.drawImage(menuBgImg.current, 0, 0, GAME_WIDTH, GAME_HEIGHT);
       ctx.fillStyle = 'rgba(2, 5, 25, 0.45)';
@@ -917,16 +1133,17 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, onStateUpdate })
     renderHeader(ctx, 'HOW TO PLAY', 'MISSION CONTROL // FLIGHT MANUAL', '#ff5fb4');
 
     const guides = [
-      { title: 'MOVE SHIP 1', subtitle: 'Left / Right thrusters (or touch Left/Right buttons)', key: '← / →', accent: '#37f5ff' },
-      { title: 'FIRE CANNONS 1', subtitle: 'Hold for continuous plasma rapid fire', key: 'SPACE', accent: '#af7dff' },
-      { title: 'MOVE SHIP 2 (CO-OP)', subtitle: 'P2 Thruster movement controls', key: 'A / D', accent: '#64ffb4' },
-      { title: 'FIRE CANNONS 2', subtitle: 'P2 Continuous plasma weapon fire', key: 'F', accent: '#ffeb96' },
+      { title: 'MOVE SHIP 1', subtitle: 'Left / Right thrusters', key: '← / →', accent: '#37f5ff' },
+      { title: 'FIRE ACTIVE WEAPON', subtitle: 'Hold for continuous firing / Laser stream', key: 'SPACE', accent: '#af7dff' },
+      { title: 'SWITCH WEAPON MODES', subtitle: 'Switch between Blaster, Triple Shot, Laser Beam, Spread', key: '1, 2, 3, 4 / Q, E', accent: '#fbbf24' },
+      { title: 'COLLECT TOKENS', subtitle: 'Pick up enemy drops to unlock special weapons & recharge', key: '⚡ 🔱 🔮', accent: '#ff37a6' },
+      { title: 'MOVE & FIRE SHIP 2', subtitle: 'Co-op thruster controls & firing', key: 'A / D + F', accent: '#64ffb4' },
       { title: 'TACTICAL PAUSE', subtitle: 'Pause game, save profile or resume battle', key: 'ESC', accent: '#ff5fb4' },
     ];
 
     for (let i = 0; i < guides.length; i++) {
-      const y = 155 + i * 66;
-      drawInteractiveCard(ctx, 140, y, 520, 52, guides[i].title, guides[i].subtitle, guides[i].key, guides[i].accent, false);
+      const y = 148 + i * 58;
+      drawInteractiveCard(ctx, 140, y, 520, 48, guides[i].title, guides[i].subtitle, guides[i].key, guides[i].accent, false);
     }
 
     renderFooterControls(ctx, 'CLICK / ENTER  RETURN TO MENU', '', 'ESC  BACK');
@@ -1005,30 +1222,25 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ engine, onStateUpdate })
     accent: string,
     selected: boolean
   ) => {
-    // Card background
     ctx.fillStyle = selected ? 'rgba(55, 245, 255, 0.18)' : 'rgba(5, 16, 43, 0.88)';
     ctx.beginPath();
     ctx.roundRect(x, y, w, h, 14);
     ctx.fill();
 
-    // Border
     ctx.strokeStyle = selected ? accent : 'rgba(80, 210, 255, 0.35)';
     ctx.lineWidth = selected ? 2.5 : 1.2;
     ctx.stroke();
 
-    // Title
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = selected ? '#ffffff' : '#dcebfa';
     ctx.font = 'bold 16px Rajdhani, sans-serif';
     ctx.fillText(title, x + 24, y + h * 0.36);
 
-    // Subtitle
     ctx.fillStyle = selected ? '#aae6ff' : '#9bb4d7';
     ctx.font = '500 11.5px Rajdhani, sans-serif';
     ctx.fillText(subtitle, x + 24, y + h * 0.72);
 
-    // Right Badge / Value
     ctx.textAlign = 'right';
     ctx.fillStyle = selected ? accent : '#b9dceb';
     ctx.font = 'bold 15px Orbitron, ui-monospace, monospace';

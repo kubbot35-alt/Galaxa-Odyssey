@@ -72,8 +72,63 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
   [EnemyType.ELITE]: { score: 250, credits: 15, difficulty: 2 },
 };
 
+export enum WeaponMode {
+  STANDARD = 'STANDARD',
+  TRIPLE_SHOT = 'TRIPLE_SHOT',
+  LASER_BEAM = 'LASER_BEAM',
+  PLASMA_SPREAD = 'PLASMA_SPREAD',
+}
+
+export interface WeaponModeConfig {
+  name: string;
+  label: string;
+  description: string;
+  color: string;
+  glow: string;
+  cooldown: number;
+}
+
+export const WEAPON_MODE_CONFIGS: Record<WeaponMode, WeaponModeConfig> = {
+  [WeaponMode.STANDARD]: {
+    name: 'Standard Blaster',
+    label: 'BLASTER',
+    description: 'Rapid concentrated dual/triple forward pulse cannons',
+    color: '#37f5ff',
+    glow: 'rgba(55, 245, 255, 0.4)',
+    cooldown: 8,
+  },
+  [WeaponMode.TRIPLE_SHOT]: {
+    name: 'Triple Fan Shot',
+    label: 'TRIPLE SHOT',
+    description: '3-way angled spread shot sweeping through entire enemy formations',
+    color: '#fbbf24',
+    glow: 'rgba(251, 191, 36, 0.4)',
+    cooldown: 9,
+  },
+  [WeaponMode.LASER_BEAM]: {
+    name: 'Hyper Laser Beam',
+    label: 'LASER BEAM',
+    description: 'Piercing high-energy coherent continuous beam cutting through all targets',
+    color: '#ff37a6',
+    glow: 'rgba(255, 55, 166, 0.5)',
+    cooldown: 3,
+  },
+  [WeaponMode.PLASMA_SPREAD]: {
+    name: 'Plasma Spread',
+    label: 'PLASMA SPREAD',
+    description: 'Heavy 5-way destructive arc bolts vaporizing bombs & dive-bombers',
+    color: '#a855f7',
+    glow: 'rgba(168, 85, 247, 0.4)',
+    cooldown: 11,
+  },
+};
+
 export enum PowerUpType {
   EXTRA_LIFE = 'EXTRA_LIFE',
+  SHIELD_BOOST = 'SHIELD_BOOST',
+  TOKEN_TRIPLE_SHOT = 'TOKEN_TRIPLE_SHOT',
+  TOKEN_LASER_BEAM = 'TOKEN_LASER_BEAM',
+  TOKEN_PLASMA_SPREAD = 'TOKEN_PLASMA_SPREAD',
   WEAPON = 'WEAPON',
 }
 
@@ -103,11 +158,16 @@ export enum SoundType {
   SHOOT = 'SHOOT',
   EXPLOSION = 'EXPLOSION',
   POWER_UP = 'POWER_UP',
+  LASER = 'LASER',
+  TRIPLE_SHOT = 'TRIPLE_SHOT',
+  TOKEN_COLLECT = 'TOKEN_COLLECT',
 }
 
 export interface GameSaveData {
   lives: number;
   weaponLevel: number;
+  weaponMode: WeaponMode;
+  unlockedModes: WeaponMode[];
   score: number;
   stage: number;
   credits: number;

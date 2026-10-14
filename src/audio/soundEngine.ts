@@ -62,6 +62,76 @@ class SoundEngine {
         gain.connect(ctx.destination);
         osc.start(now);
         osc.stop(now + 0.12);
+      } else if (type === SoundType.TRIPLE_SHOT) {
+        // High-energy triple punch sound
+        const osc = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(950, now);
+        osc.frequency.exponentialRampToValueAtTime(160, now + 0.14);
+
+        osc2.type = 'square';
+        osc2.frequency.setValueAtTime(620, now);
+        osc2.frequency.exponentialRampToValueAtTime(120, now + 0.14);
+
+        gain.gain.setValueAtTime(0.22, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.14);
+
+        osc.connect(gain);
+        osc2.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now);
+        osc2.start(now);
+        osc.stop(now + 0.14);
+        osc2.stop(now + 0.14);
+      } else if (type === SoundType.LASER) {
+        // Piercing laser continuous hum / beam discharge
+        const osc = ctx.createOscillator();
+        const oscHarmonic = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(1250, now);
+        osc.frequency.linearRampToValueAtTime(800, now + 0.08);
+
+        oscHarmonic.type = 'sine';
+        oscHarmonic.frequency.setValueAtTime(2500, now);
+        oscHarmonic.frequency.linearRampToValueAtTime(1600, now + 0.08);
+
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+
+        osc.connect(gain);
+        oscHarmonic.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now);
+        oscHarmonic.start(now);
+        osc.stop(now + 0.08);
+        oscHarmonic.stop(now + 0.08);
+      } else if (type === SoundType.TOKEN_COLLECT) {
+        // Glorious arpeggio for weapon token unlock
+        const notes = [440, 554.37, 659.25, 880];
+        notes.forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          const start = now + idx * 0.045;
+
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, start);
+
+          gain.gain.setValueAtTime(0.25, start);
+          gain.gain.exponentialRampToValueAtTime(0.005, start + 0.12);
+
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+
+          osc.start(start);
+          osc.stop(start + 0.12);
+        });
       } else if (type === SoundType.EXPLOSION) {
         // White noise generator
         const bufferSize = ctx.sampleRate * 0.35;
@@ -152,6 +222,101 @@ class SoundEngine {
       this.musicTimeout = null;
     }
     this.melodyIndex = 0;
+  }
+
+  // 21st-century modern sci-fi UI sounds
+  public playUiHover() {
+    if (!this.soundEnabled) return;
+    const ctx = this.initCtx();
+    if (!ctx) return;
+    try {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1400, now);
+      osc.frequency.exponentialRampToValueAtTime(1800, now + 0.03);
+
+      gain.gain.setValueAtTime(0.04, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.035);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  public playUiClick() {
+    if (!this.soundEnabled) return;
+    const ctx = this.initCtx();
+    if (!ctx) return;
+    try {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(800, now);
+      osc.frequency.exponentialRampToValueAtTime(2400, now + 0.06);
+
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(1200, now);
+      osc2.frequency.exponentialRampToValueAtTime(400, now + 0.06);
+
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.065);
+
+      osc.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc2.start(now);
+      osc.stop(now + 0.065);
+      osc2.stop(now + 0.065);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  public playWarpJump() {
+    if (!this.soundEnabled) return;
+    const ctx = this.initCtx();
+    if (!ctx) return;
+    try {
+      const now = ctx.currentTime;
+      // 1. Bass sub-rumble sweep
+      const sub = ctx.createOscillator();
+      const subGain = ctx.createGain();
+      sub.type = 'sawtooth';
+      sub.frequency.setValueAtTime(60, now);
+      sub.frequency.exponentialRampToValueAtTime(320, now + 0.85);
+      subGain.gain.setValueAtTime(0.25, now);
+      subGain.gain.exponentialRampToValueAtTime(0.01, now + 0.95);
+      sub.connect(subGain);
+      subGain.connect(ctx.destination);
+      sub.start(now);
+      sub.stop(now + 0.95);
+
+      // 2. High-energy beam charge whoosh
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(350, now);
+      osc.frequency.exponentialRampToValueAtTime(3800, now + 0.8);
+      gain.gain.setValueAtTime(0.08, now);
+      gain.gain.exponentialRampToValueAtTime(0.22, now + 0.7);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.9);
+    } catch {
+      // Audio fallback
+    }
   }
 }
 
