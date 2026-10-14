@@ -225,10 +225,18 @@ export const Modern3DGameCanvas: React.FC<Modern3DGameCanvasProps> = ({
 
   const p1 = engine.player1;
   const shieldPercent = Math.max(0, Math.min(100, Math.round((p1.shield / MAX_SHIELD) * 100)));
+  const shieldLagPercent = Math.max(shieldPercent, Math.min(100, Math.round(((p1.shieldLag ?? p1.shield) / MAX_SHIELD) * 100)));
   const energyPercent = Math.max(0, Math.min(100, Math.round((p1.weaponEnergy / MAX_WEAPON_ENERGY) * 100)));
+  const isTakingDamage = !!(p1.damageFlash && p1.damageFlash > 0.1);
 
   return (
-    <div className="relative w-full max-w-[1000px] h-[640px] rounded-2xl overflow-hidden border border-cyan-500/30 shadow-[0_0_50px_rgba(6,182,212,0.15)] bg-slate-950 select-none">
+    <div
+      className={`relative w-full max-w-[1000px] h-[640px] rounded-2xl overflow-hidden border transition-all duration-150 bg-slate-950 select-none ${
+        isTakingDamage
+          ? 'border-red-500/80 shadow-[0_0_60px_rgba(239,68,68,0.45)]'
+          : 'border-cyan-500/30 shadow-[0_0_50px_rgba(6,182,212,0.15)]'
+      }`}
+    >
       {/* 3D WebGL Three.js Container */}
       <div ref={containerRef} className="absolute inset-0 w-full h-full cursor-crosshair" />
 
@@ -237,23 +245,34 @@ export const Modern3DGameCanvas: React.FC<Modern3DGameCanvasProps> = ({
         {/* TOP STATUS BAR */}
         <div className="w-full flex items-start justify-between gap-4 pointer-events-auto">
           {/* Left: Shield & Hull Status */}
-          <div className="flex flex-col gap-2 p-3 rounded-xl bg-slate-900/80 backdrop-blur-md border border-cyan-500/30 shadow-lg min-w-[240px]">
+          <div
+            className={`flex flex-col gap-2 p-3 rounded-xl bg-slate-900/80 backdrop-blur-md border shadow-lg min-w-[240px] transition-colors duration-150 ${
+              isTakingDamage ? 'border-red-500/60 shadow-[0_0_20px_rgba(239,68,68,0.3)]' : 'border-cyan-500/30'
+            }`}
+          >
             <div className="flex items-center justify-between text-xs">
               <span className="flex items-center gap-1.5 font-bold text-cyan-300">
-                <Shield size={14} className="text-cyan-400" /> DEFLECTOR SHIELD
+                <Shield size={14} className={isTakingDamage ? 'text-red-400 animate-spin' : 'text-cyan-400'} /> DEFLECTOR SHIELD
               </span>
-              <span className="font-bold text-cyan-200">{shieldPercent}%</span>
+              <span className={`font-bold ${isTakingDamage ? 'text-red-300' : 'text-cyan-200'}`}>{shieldPercent}%</span>
             </div>
-            {/* Shield Progress Bar */}
-            <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden border border-cyan-500/20">
+
+            {/* Shield Progress Bar with Ghost Depletion Lag Animation */}
+            <div className="relative w-full h-2 rounded-full bg-slate-950 overflow-hidden border border-cyan-500/20">
+              {/* Ghost Depletion Lag Bar (Red/Amber) */}
               <div
-                className={`h-full transition-all duration-200 ${
+                className="absolute inset-y-0 left-0 bg-red-500/80 transition-all duration-300 ease-out"
+                style={{ width: `${shieldLagPercent}%` }}
+              />
+              {/* Active Foreground Shield Bar */}
+              <div
+                className={`relative h-full transition-all duration-150 ${
                   shieldPercent > 50
                     ? 'bg-gradient-to-r from-cyan-500 to-blue-400 shadow-[0_0_10px_rgba(6,182,212,0.6)]'
                     : shieldPercent > 20
                     ? 'bg-gradient-to-r from-amber-500 to-yellow-400'
                     : 'bg-gradient-to-r from-red-600 to-rose-400 animate-pulse'
-                }`}
+                } ${isTakingDamage ? 'brightness-150' : ''}`}
                 style={{ width: `${shieldPercent}%` }}
               />
             </div>
@@ -272,6 +291,13 @@ export const Modern3DGameCanvas: React.FC<Modern3DGameCanvasProps> = ({
                 {p1.lives <= 0 && <span className="text-red-400 font-bold">CRITICAL</span>}
               </div>
             </div>
+
+            {/* Damage Alert Telemetry Badge */}
+            {p1.hitNotice && (
+              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-red-950/80 border border-red-500/60 text-[10px] text-red-300 font-bold animate-pulse">
+                <span>⚡ {p1.hitNotice}</span>
+              </div>
+            )}
           </div>
 
           {/* Center: Mission Sector & 3D View Mode Switcher */}

@@ -93,6 +93,7 @@ export interface PlayerState {
   width: number;
   height: number;
   lives: number;
+  maxLives?: number;
   shield: number;
   score: number;
   weaponLevel: number;
@@ -102,6 +103,12 @@ export interface PlayerState {
   isLaserActive?: boolean;
   movingLeft: boolean;
   movingRight: boolean;
+  lastHitTime?: number;
+  recentDamageTaken?: number;
+  damageFlash?: number; // 0.0 to 1.0 (flashing intensity)
+  shieldLag?: number; // for smooth depletion ghost lag animation
+  hitNotice?: string;
+  hitNoticeTimer?: number;
 }
 
 export interface ActiveAchievementToast {
@@ -438,6 +445,7 @@ export class GameEngine {
       width: PLAYER_WIDTH,
       height: PLAYER_HEIGHT,
       lives: startLives,
+      maxLives: startLives,
       shield: MAX_SHIELD,
       score: 0,
       weaponLevel: initialWeapon,
@@ -447,6 +455,12 @@ export class GameEngine {
       isLaserActive: false,
       movingLeft: false,
       movingRight: false,
+      lastHitTime: 0,
+      recentDamageTaken: 0,
+      damageFlash: 0,
+      shieldLag: MAX_SHIELD,
+      hitNotice: undefined,
+      hitNoticeTimer: 0,
     };
 
     if (this.twoPlayerMode) {
@@ -457,6 +471,7 @@ export class GameEngine {
         width: PLAYER_WIDTH,
         height: PLAYER_HEIGHT,
         lives: startLives,
+        maxLives: startLives,
         shield: MAX_SHIELD,
         score: 0,
         weaponLevel: initialWeapon,
@@ -466,6 +481,12 @@ export class GameEngine {
         isLaserActive: false,
         movingLeft: false,
         movingRight: false,
+        lastHitTime: 0,
+        recentDamageTaken: 0,
+        damageFlash: 0,
+        shieldLag: MAX_SHIELD,
+        hitNotice: undefined,
+        hitNoticeTimer: 0,
       };
     } else {
       this.player2 = null;
@@ -815,6 +836,21 @@ export class GameEngine {
       this.player1.weaponEnergy = Math.min(MAX_WEAPON_ENERGY, this.player1.weaponEnergy + 0.08);
     }
 
+    // Dynamic damage flash & shield lag decay for Player 1
+    if (this.player1.damageFlash && this.player1.damageFlash > 0) {
+      this.player1.damageFlash = Math.max(0, this.player1.damageFlash - 0.04);
+    }
+    if (this.player1.shieldLag === undefined) this.player1.shieldLag = this.player1.shield;
+    if (this.player1.shieldLag > this.player1.shield) {
+      this.player1.shieldLag = Math.max(this.player1.shield, this.player1.shieldLag - 1.25);
+    } else if (this.player1.shieldLag < this.player1.shield) {
+      this.player1.shieldLag = this.player1.shield;
+    }
+    if (this.player1.hitNoticeTimer && this.player1.hitNoticeTimer > 0) {
+      this.player1.hitNoticeTimer--;
+      if (this.player1.hitNoticeTimer === 0) this.player1.hitNotice = undefined;
+    }
+
     // Player 1 firing
     if (this.fireCooldown > 0) this.fireCooldown--;
 
@@ -835,6 +871,19 @@ export class GameEngine {
       }
       if (this.player2.movingRight) {
         this.player2.x = Math.min(GAME_WIDTH - this.player2.width - 10, this.player2.x + PLAYER_SPEED);
+      }
+      if (this.player2.damageFlash && this.player2.damageFlash > 0) {
+        this.player2.damageFlash = Math.max(0, this.player2.damageFlash - 0.04);
+      }
+      if (this.player2.shieldLag === undefined) this.player2.shieldLag = this.player2.shield;
+      if (this.player2.shieldLag > this.player2.shield) {
+        this.player2.shieldLag = Math.max(this.player2.shield, this.player2.shieldLag - 1.25);
+      } else if (this.player2.shieldLag < this.player2.shield) {
+        this.player2.shieldLag = this.player2.shield;
+      }
+      if (this.player2.hitNoticeTimer && this.player2.hitNoticeTimer > 0) {
+        this.player2.hitNoticeTimer--;
+        if (this.player2.hitNoticeTimer === 0) this.player2.hitNotice = undefined;
       }
       if (this.secondPlayerFireCooldown > 0) this.secondPlayerFireCooldown--;
       if (this.secondPlayerFireHeld && this.secondPlayerFireCooldown === 0) {
@@ -1150,19 +1199,28 @@ export class GameEngine {
 
   private damagePlayer(player: PlayerState, damage: number) {
     this.tookDamageInCurrentWave = true;
+    player.lastHitTime = Date.now();
+    player.recentDamageTaken = damage;
+    player.damageFlash = 1.0;
 
     if (this.infiniteLives) {
       player.shield = MAX_SHIELD;
+      player.hitNotice = 'SHIELD DEFLECTED';
+      player.hitNoticeTimer = 40;
       return;
     }
 
     if (player.shield > 0) {
       player.shield = Math.max(0, player.shield - damage);
+      player.hitNotice = `-${damage} SHIELD`;
+      player.hitNoticeTimer = 45;
       return;
     }
 
     player.lives -= 1;
     player.shield = MAX_SHIELD;
+    player.hitNotice = 'CRITICAL HULL HIT!';
+    player.hitNoticeTimer = 60;
     this.addExplosion(player.x + 20, player.y + 20, 80, 210, 255, 32);
     soundEngine.playSound(SoundType.EXPLOSION);
   }
