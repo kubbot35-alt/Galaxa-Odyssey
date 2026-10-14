@@ -373,6 +373,147 @@ class SoundEngine {
       // Audio fallback
     }
   }
+
+  // Active cinematic intro audio nodes for clean cleanup on skip or completion
+  private introGainNode: GainNode | null = null;
+  private introOscillators: (OscillatorNode | AudioBufferSourceNode)[] = [];
+
+  public playCinematicIntroSoundscape() {
+    if (!this.soundEnabled) return;
+    this.stopCinematicIntroSoundscape();
+    const ctx = this.initCtx();
+    if (!ctx) return;
+
+    try {
+      const now = ctx.currentTime;
+      const masterGain = ctx.createGain();
+      masterGain.gain.setValueAtTime(0.001, now);
+      masterGain.gain.exponentialRampToValueAtTime(0.35, now + 1.2);
+      masterGain.connect(ctx.destination);
+      this.introGainNode = masterGain;
+
+      // 1. Deep Hangar Ambience & Sub Drone (45Hz - 55Hz subtle slow pulsing)
+      const sub = ctx.createOscillator();
+      const subGain = ctx.createGain();
+      sub.type = 'sine';
+      sub.frequency.setValueAtTime(55, now);
+      sub.frequency.linearRampToValueAtTime(48, now + 3.0);
+      sub.frequency.linearRampToValueAtTime(60, now + 6.0);
+      subGain.gain.setValueAtTime(0.28, now);
+      sub.connect(subGain);
+      subGain.connect(masterGain);
+      sub.start(now);
+      this.introOscillators.push(sub);
+
+      // 2. Sci-Fi Harmonic Atmosphere Pad (Warm Fifth Chord)
+      const chordNotes = [110, 164.81, 220, 329.63]; // A2, E3, A3, E4
+      chordNotes.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const chordGain = ctx.createGain();
+        osc.type = idx % 2 === 0 ? 'triangle' : 'sine';
+        osc.frequency.setValueAtTime(freq, now);
+        // Slight detune for analog cinematic warmth
+        osc.detune.setValueAtTime((idx - 1.5) * 8, now);
+
+        chordGain.gain.setValueAtTime(0.001, now);
+        chordGain.gain.exponentialRampToValueAtTime(0.045 / (idx + 1), now + 0.8 + idx * 0.2);
+        chordGain.gain.linearRampToValueAtTime(0.06 / (idx + 1), now + 4.5);
+        chordGain.gain.exponentialRampToValueAtTime(0.001, now + 7.5);
+
+        osc.connect(chordGain);
+        chordGain.connect(masterGain);
+        osc.start(now);
+        this.introOscillators.push(osc);
+      });
+
+      // 3. Hydraulic Airlock / Vent Hiss (White noise through bandpass)
+      const bufferSize = ctx.sampleRate * 1.5;
+      const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const output = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = Math.random() * 2 - 1;
+      }
+      const whiteNoise = ctx.createBufferSource();
+      whiteNoise.buffer = noiseBuffer;
+
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(1400, now + 0.4);
+      filter.frequency.exponentialRampToValueAtTime(450, now + 1.8);
+      filter.Q.value = 3.0;
+
+      const hissGain = ctx.createGain();
+      hissGain.gain.setValueAtTime(0.001, now);
+      hissGain.gain.exponentialRampToValueAtTime(0.12, now + 0.5);
+      hissGain.gain.exponentialRampToValueAtTime(0.001, now + 1.8);
+
+      whiteNoise.connect(filter);
+      filter.connect(hissGain);
+      hissGain.connect(masterGain);
+      whiteNoise.start(now + 0.4);
+      this.introOscillators.push(whiteNoise);
+
+      // 4. Thruster Spool-up & Diagnostic Chime at mid-flight (t = 3.2s)
+      const chimeOsc = ctx.createOscillator();
+      const chimeGain = ctx.createGain();
+      chimeOsc.type = 'sine';
+      chimeOsc.frequency.setValueAtTime(587.33, now + 2.8); // D5
+      chimeOsc.frequency.setValueAtTime(880, now + 3.0); // A5
+      chimeOsc.frequency.setValueAtTime(1174.66, now + 3.2); // D6
+      chimeGain.gain.setValueAtTime(0.001, now + 2.8);
+      chimeGain.gain.linearRampToValueAtTime(0.09, now + 3.2);
+      chimeGain.gain.exponentialRampToValueAtTime(0.001, now + 4.8);
+
+      chimeOsc.connect(chimeGain);
+      chimeGain.connect(masterGain);
+      chimeOsc.start(now + 2.8);
+      chimeOsc.stop(now + 4.8);
+      this.introOscillators.push(chimeOsc);
+
+      // 5. Hero Reveal Fanfare Chime (t = 5.2s)
+      const heroOsc = ctx.createOscillator();
+      const heroGain = ctx.createGain();
+      heroOsc.type = 'triangle';
+      heroOsc.frequency.setValueAtTime(440, now + 5.0);
+      heroOsc.frequency.exponentialRampToValueAtTime(880, now + 5.5);
+      heroGain.gain.setValueAtTime(0.001, now + 5.0);
+      heroGain.gain.linearRampToValueAtTime(0.08, now + 5.4);
+      heroGain.gain.exponentialRampToValueAtTime(0.001, now + 7.2);
+
+      heroOsc.connect(heroGain);
+      heroGain.connect(masterGain);
+      heroOsc.start(now + 5.0);
+      heroOsc.stop(now + 7.2);
+      this.introOscillators.push(heroOsc);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  public stopCinematicIntroSoundscape() {
+    if (!this.introGainNode) return;
+    try {
+      const ctx = this.ctx;
+      if (ctx) {
+        const now = ctx.currentTime;
+        this.introGainNode.gain.cancelScheduledValues(now);
+        this.introGainNode.gain.setValueAtTime(this.introGainNode.gain.value, now);
+        this.introGainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      }
+      setTimeout(() => {
+        this.introOscillators.forEach((osc) => {
+          try {
+            if ('stop' in osc) osc.stop();
+          } catch {}
+        });
+        this.introOscillators = [];
+        this.introGainNode = null;
+      }, 400);
+    } catch {
+      this.introOscillators = [];
+      this.introGainNode = null;
+    }
+  }
 }
 
 export const soundEngine = new SoundEngine();

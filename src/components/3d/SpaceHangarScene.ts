@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { Spaceship3D } from './Spaceship3D';
 
 export interface CameraTargetPreset {
   position: THREE.Vector3;
@@ -115,6 +116,7 @@ export class SpaceHangarScene {
   public enginePlumes: THREE.Mesh[] = [];
   public laserTurretMesh: THREE.Mesh | null = null;
   public cannonMeshes: THREE.Mesh[] = [];
+  public spaceship3D!: Spaceship3D;
 
   // Material references for live skin switching
   private hullMaterials: THREE.MeshStandardMaterial[] = [];
@@ -139,11 +141,44 @@ export class SpaceHangarScene {
   private warpTime = 0;
   private onWarpCompleteCallback: (() => void) | null = null;
 
+  // Cinematic Intro Fly-Through State & Spline Paths
+  public hangarGroup!: THREE.Group;
+  public isCinematicIntro = false;
+  public cinematicProgress = 0;
+  private cinematicIntroTime = 0;
+  private cinematicDuration = 7.2;
+  private onIntroCompleteCallback: (() => void) | null = null;
+  private cameraPositionSpline: THREE.CatmullRomCurve3;
+  private cameraLookAtSpline: THREE.CatmullRomCurve3;
+
   private clock = new THREE.Clock();
 
   constructor(container: HTMLElement) {
     const width = container.clientWidth || 900;
     const height = container.clientHeight || 600;
+
+    // Initialize 3D Splines for Cinematic Hangar Fly-Through
+    this.cameraPositionSpline = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-8.2, 7.8, -20.0), // High in the rear rafters behind overhead gantries
+      new THREE.Vector3(-6.2, 5.0, -13.5), // Gliding down through the second hangar arch
+      new THREE.Vector3(-4.6, 2.8, -7.5),  // Descending alongside the port catwalk
+      new THREE.Vector3(-3.2, 0.9, -2.2),  // Low swoop right beside the roaring ion engine thrusters and port wing
+      new THREE.Vector3(1.6, 1.3, 1.8),    // Sweeping diagonally across forward fuselage and laser turret
+      new THREE.Vector3(3.6, 2.2, 4.2),    // Hero high-quarter look at cockpit canopy glass and front nose
+      new THREE.Vector3(1.4, 1.8, 5.8),    // Centering alignment
+      new THREE.Vector3(0.0, 1.6, 6.2),    // Seamlessly arrives at CAMERA_PRESETS.default.position
+    ], false, 'catmullrom', 0.5);
+
+    this.cameraLookAtSpline = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0.0, 1.5, -5.0),  // Looking down the long hangar axis
+      new THREE.Vector3(-0.6, 1.0, -2.0), // Looking at the starfighter from above
+      new THREE.Vector3(0.0, 0.6, 0.0),   // Looking toward the ship center
+      new THREE.Vector3(0.8, 0.4, 0.5),   // Looking across the glowing engines and weapons
+      new THREE.Vector3(0.0, 0.4, 1.0),   // Looking directly at the pilot's cockpit canopy
+      new THREE.Vector3(-0.2, 0.2, 0.6),  // Panning across forward hull
+      new THREE.Vector3(0.0, 0.1, 0.2),   // Focusing on ship center
+      new THREE.Vector3(0.0, 0.0, 0.0),   // Seamlessly arrives at CAMERA_PRESETS.default.lookAt
+    ], false, 'catmullrom', 0.5);
 
     // 1. Scene setup
     this.scene = new THREE.Scene();
@@ -195,12 +230,19 @@ export class SpaceHangarScene {
     const flightDeck = this.createHolographicFlightDeck();
     this.scene.add(flightDeck);
 
-    // 11. High-Fidelity 3D Starfighter
-    this.shipGroup = this.createStarfighter();
+    // 10b. Full Architectural Hangar Bay Environment (Arches, Gantries, Catwalks, Runway Lighting)
+    this.hangarGroup = this.createHangarBay();
+    this.scene.add(this.hangarGroup);
+
+    // 11. 3D Spaceship
+    this.spaceship3D = new Spaceship3D();
+    this.shipGroup = this.spaceship3D.mesh;
+    this.engineLights = this.spaceship3D.engineLights;
+    this.enginePlumes = this.spaceship3D.engineFlames;
     this.scene.add(this.shipGroup);
 
-    // Apply default skin
-    this.setShipSkin('stealth');
+    // Apply default skin matching concept art
+    this.setShipSkin('titanium');
 
     // User Event Listeners
     this.setupInteractions(container);
@@ -380,6 +422,287 @@ export class SpaceHangarScene {
     return torus;
   }
 
+  // Architectural Ship Hangar Bay: Arches, Gantries, Catwalks, Lighting & Props
+  private createHangarBay(): THREE.Group {
+    const hangar = new THREE.Group();
+
+    // Materials
+    const darkMetalMat = new THREE.MeshStandardMaterial({
+      color: 0x0f172a,
+      metalness: 0.92,
+      roughness: 0.28,
+    });
+
+    const frameMat = new THREE.MeshStandardMaterial({
+      color: 0x1e293b,
+      metalness: 0.88,
+      roughness: 0.32,
+    });
+
+    const hazardMat = new THREE.MeshStandardMaterial({
+      color: 0x334155,
+      metalness: 0.7,
+      roughness: 0.4,
+      emissive: 0xd97706,
+      emissiveIntensity: 0.25,
+    });
+
+    const cyanNeonMat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+    });
+
+    const amberNeonMat = new THREE.MeshBasicMaterial({
+      color: 0xfbbf24,
+    });
+
+    // 1. Hangar Main Launch Deck Floor Plate
+    const floorGeom = new THREE.BoxGeometry(22, 0.4, 40);
+    const floorMesh = new THREE.Mesh(floorGeom, darkMetalMat);
+    floorMesh.position.set(0, -2.0, -4.5);
+    hangar.add(floorMesh);
+
+    // Runway Guide Marker Strips (Dual glowing tracks leading out to launch gate)
+    const markerCount = 14;
+    const markerGeom = new THREE.BoxGeometry(0.24, 0.04, 1.4);
+    for (let i = 0; i < markerCount; i++) {
+      const z = -20 + i * 2.6;
+      // Left runway strip
+      const leftMarker = new THREE.Mesh(markerGeom, i % 3 === 0 ? amberNeonMat : cyanNeonMat);
+      leftMarker.position.set(-1.8, -1.78, z);
+      hangar.add(leftMarker);
+
+      // Right runway strip
+      const rightMarker = new THREE.Mesh(markerGeom, i % 3 === 0 ? amberNeonMat : cyanNeonMat);
+      rightMarker.position.set(1.8, -1.78, z);
+      hangar.add(rightMarker);
+    }
+
+    // Outer runway edge safety lines
+    const edgeLineGeom = new THREE.BoxGeometry(0.12, 0.04, 38);
+    const leftEdge = new THREE.Mesh(edgeLineGeom, amberNeonMat);
+    leftEdge.position.set(-3.2, -1.78, -4.5);
+    hangar.add(leftEdge);
+
+    const rightEdge = new THREE.Mesh(edgeLineGeom, amberNeonMat);
+    rightEdge.position.set(3.2, -1.78, -4.5);
+    hangar.add(rightEdge);
+
+    // 2. Giant Hexagonal Hangar Arches / Bulkhead Ribs
+    const archZPositions = [-21, -14, -7, 0, 7, 13.5];
+    const colGeom = new THREE.BoxGeometry(0.85, 11, 0.9);
+    const beamGeom = new THREE.BoxGeometry(19, 0.85, 0.9);
+    const gussetGeom = new THREE.BoxGeometry(0.7, 3.2, 0.8);
+    const innerNeonGeom = new THREE.BoxGeometry(0.1, 10.5, 0.1);
+    const beamNeonGeom = new THREE.BoxGeometry(18.2, 0.1, 0.1);
+
+    archZPositions.forEach((z, idx) => {
+      const isGateway = idx === archZPositions.length - 1;
+      const neonMat = isGateway ? amberNeonMat : cyanNeonMat;
+
+      // Left column
+      const leftCol = new THREE.Mesh(colGeom, frameMat);
+      leftCol.position.set(-9.2, 3.5, z);
+      hangar.add(leftCol);
+
+      const leftNeon = new THREE.Mesh(innerNeonGeom, neonMat);
+      leftNeon.position.set(-8.7, 3.5, z);
+      hangar.add(leftNeon);
+
+      // Right column
+      const rightCol = new THREE.Mesh(colGeom, frameMat);
+      rightCol.position.set(9.2, 3.5, z);
+      hangar.add(rightCol);
+
+      const rightNeon = new THREE.Mesh(innerNeonGeom, neonMat);
+      rightNeon.position.set(8.7, 3.5, z);
+      hangar.add(rightNeon);
+
+      // Top ceiling girder
+      const topBeam = new THREE.Mesh(beamGeom, frameMat);
+      topBeam.position.set(0, 9.0, z);
+      hangar.add(topBeam);
+
+      const topNeon = new THREE.Mesh(beamNeonGeom, neonMat);
+      topNeon.position.set(0, 8.5, z);
+      hangar.add(topNeon);
+
+      // Left angled gusset
+      const leftGusset = new THREE.Mesh(gussetGeom, frameMat);
+      leftGusset.position.set(-7.5, 7.6, z);
+      leftGusset.rotation.z = Math.PI / 4;
+      hangar.add(leftGusset);
+
+      // Right angled gusset
+      const rightGusset = new THREE.Mesh(gussetGeom, frameMat);
+      rightGusset.position.set(7.5, 7.6, z);
+      rightGusset.rotation.z = -Math.PI / 4;
+      hangar.add(rightGusset);
+
+      // Overhead industrial spotlight fixtures
+      const lampHousingGeom = new THREE.CylinderGeometry(0.35, 0.45, 0.5, 12);
+      const lampMat = new THREE.MeshStandardMaterial({
+        color: 0x090d16,
+        metalness: 0.9,
+        roughness: 0.2,
+        emissive: 0x38bdf8,
+        emissiveIntensity: 0.5,
+      });
+
+      const lamp = new THREE.Mesh(lampHousingGeom, lampMat);
+      lamp.position.set(0, 8.4, z);
+      hangar.add(lamp);
+
+      // Directional light pool on ship
+      if (idx === 1 || idx === 3) {
+        const spot = new THREE.SpotLight(0x38bdf8, 2.8, 22, Math.PI / 5, 0.4);
+        spot.position.set(0, 8.3, z);
+        spot.target.position.set(0, 0, z);
+        hangar.add(spot);
+        hangar.add(spot.target);
+      }
+    });
+
+    // 3. Longitudinal Overhead Crane Trusses & Wall Girders
+    const trussGeom = new THREE.BoxGeometry(0.5, 0.5, 38);
+    const leftTruss = new THREE.Mesh(trussGeom, frameMat);
+    leftTruss.position.set(-7.8, 8.8, -4.5);
+    hangar.add(leftTruss);
+
+    const rightTruss = new THREE.Mesh(trussGeom, frameMat);
+    rightTruss.position.set(7.8, 8.8, -4.5);
+    hangar.add(rightTruss);
+
+    // Center ceiling power conduit
+    const conduitGeom = new THREE.CylinderGeometry(0.14, 0.14, 38, 8);
+    const conduit = new THREE.Mesh(conduitGeom, hazardMat);
+    conduit.rotation.x = Math.PI / 2;
+    conduit.position.set(0, 8.9, -4.5);
+    hangar.add(conduit);
+
+    // 4. Elevated Port & Starboard Maintenance Catwalks
+    const catwalkFloorGeom = new THREE.BoxGeometry(1.9, 0.12, 36);
+    const catwalkRailGeom = new THREE.CylinderGeometry(0.035, 0.035, 36, 8);
+    const postGeom = new THREE.BoxGeometry(0.08, 1.0, 0.08);
+
+    // Left Catwalk
+    const leftCatwalkFloor = new THREE.Mesh(catwalkFloorGeom, darkMetalMat);
+    leftCatwalkFloor.position.set(-8.0, 3.2, -4.5);
+    hangar.add(leftCatwalkFloor);
+
+    const leftRailTop = new THREE.Mesh(catwalkRailGeom, cyanNeonMat);
+    leftRailTop.rotation.x = Math.PI / 2;
+    leftRailTop.position.set(-7.1, 4.1, -4.5);
+    hangar.add(leftRailTop);
+
+    const leftCatwalkEdge = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, 36), amberNeonMat);
+    leftCatwalkEdge.position.set(-7.05, 3.26, -4.5);
+    hangar.add(leftCatwalkEdge);
+
+    // Right Catwalk
+    const rightCatwalkFloor = new THREE.Mesh(catwalkFloorGeom, darkMetalMat);
+    rightCatwalkFloor.position.set(8.0, 3.2, -4.5);
+    hangar.add(rightCatwalkFloor);
+
+    const rightRailTop = new THREE.Mesh(catwalkRailGeom, cyanNeonMat);
+    rightRailTop.rotation.x = Math.PI / 2;
+    rightRailTop.position.set(7.1, 4.1, -4.5);
+    hangar.add(rightRailTop);
+
+    const rightCatwalkEdge = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, 36), amberNeonMat);
+    rightCatwalkEdge.position.set(7.05, 3.26, -4.5);
+    hangar.add(rightCatwalkEdge);
+
+    // Catwalk Stanchion Posts every 6 units
+    for (let z = -20; z <= 12; z += 5) {
+      const p1 = new THREE.Mesh(postGeom, frameMat);
+      p1.position.set(-7.1, 3.7, z);
+      hangar.add(p1);
+
+      const p2 = new THREE.Mesh(postGeom, frameMat);
+      p2.position.set(7.1, 3.7, z);
+      hangar.add(p2);
+
+      // Support pillar extending to floor
+      const pillarGeom = new THREE.CylinderGeometry(0.12, 0.14, 5.0, 8);
+      const pilLeft = new THREE.Mesh(pillarGeom, frameMat);
+      pilLeft.position.set(-8.0, 0.7, z);
+      hangar.add(pilLeft);
+
+      const pilRight = new THREE.Mesh(pillarGeom, frameMat);
+      pilRight.position.set(8.0, 0.7, z);
+      hangar.add(pilRight);
+    }
+
+    // 5. Portside Articulated Robotic Refueling & Maintenance Arm
+    const craneBaseGeom = new THREE.CylinderGeometry(0.65, 0.75, 0.6, 16);
+    const craneBase = new THREE.Mesh(craneBaseGeom, frameMat);
+    craneBase.position.set(-4.6, -1.7, -3.2);
+    hangar.add(craneBase);
+
+    const craneArm1Geom = new THREE.BoxGeometry(0.25, 2.4, 0.35);
+    const craneArm1 = new THREE.Mesh(craneArm1Geom, hazardMat);
+    craneArm1.position.set(-4.4, -0.6, -3.2);
+    craneArm1.rotation.z = -Math.PI / 6;
+    hangar.add(craneArm1);
+
+    const craneArm2Geom = new THREE.BoxGeometry(0.2, 2.2, 0.3);
+    const craneArm2 = new THREE.Mesh(craneArm2Geom, frameMat);
+    craneArm2.position.set(-3.6, 0.4, -3.2);
+    craneArm2.rotation.z = Math.PI / 4;
+    hangar.add(craneArm2);
+
+    const craneTipGeom = new THREE.ConeGeometry(0.22, 0.6, 8);
+    const craneTip = new THREE.Mesh(craneTipGeom, cyanNeonMat);
+    craneTip.position.set(-2.6, 0.9, -3.2);
+    craneTip.rotation.z = -Math.PI / 2;
+    hangar.add(craneTip);
+
+    // 6. Starboard Power Terminal & Holographic Diagnostic Station
+    const terminalGeom = new THREE.BoxGeometry(1.6, 1.8, 1.2);
+    const terminal = new THREE.Mesh(terminalGeom, frameMat);
+    terminal.position.set(5.2, -1.0, -4.0);
+    hangar.add(terminal);
+
+    const screenGeom = new THREE.PlaneGeometry(1.1, 0.7);
+    const screenMat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      side: THREE.DoubleSide,
+    });
+    const screen = new THREE.Mesh(screenGeom, screenMat);
+    screen.position.set(5.2, -0.7, -3.39);
+    hangar.add(screen);
+
+    // 7. Stacked Titanium Cargo Pods at Rear Corners
+    const podGeom = new THREE.BoxGeometry(2.0, 1.5, 2.2);
+    const pod1 = new THREE.Mesh(podGeom, darkMetalMat);
+    pod1.position.set(-6.5, -1.1, -18.5);
+    hangar.add(pod1);
+
+    const pod2 = new THREE.Mesh(podGeom, frameMat);
+    pod2.position.set(6.5, -1.1, -18.5);
+    hangar.add(pod2);
+
+    const pod3 = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.3, 1.8), hazardMat);
+    pod3.position.set(-6.5, 0.3, -18.5);
+    pod3.rotation.y = 0.25;
+    hangar.add(pod3);
+
+    // 8. Atmospheric Forcefield Barrier at Outer Gateway (Facing Gas Giant & Stars)
+    const barrierGeom = new THREE.PlaneGeometry(17.8, 10.2);
+    const barrierMat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      transparent: true,
+      opacity: 0.14,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+    });
+    const barrier = new THREE.Mesh(barrierGeom, barrierMat);
+    barrier.position.set(0, 3.5, 13.5);
+    hangar.add(barrier);
+
+    return hangar;
+  }
+
   // Generates procedural canvas texture for starfighter fuselage
   private createHullTexture(): THREE.CanvasTexture {
     const canvas = document.createElement('canvas');
@@ -481,242 +804,12 @@ export class SpaceHangarScene {
   }
 
   private createStarfighter(): THREE.Group {
-    const ship = new THREE.Group();
-    ship.position.set(0, 0, 0);
-
-    const hullTexture = this.createHullTexture();
-
-    // Materials
-    const hullMat = new THREE.MeshStandardMaterial({
-      color: 0x0f172a,
-      map: hullTexture,
-      metalness: 0.92,
-      roughness: 0.22,
-    });
-    this.hullMaterials.push(hullMat);
-
-    const armorMat = new THREE.MeshStandardMaterial({
-      color: 0x1e293b,
-      metalness: 0.88,
-      roughness: 0.32,
-    });
-    this.armorMaterials.push(armorMat);
-
-    const trimMat = new THREE.MeshStandardMaterial({
-      color: 0x38bdf8,
-      emissive: 0x0284c7,
-      emissiveIntensity: 0.85,
-      metalness: 0.9,
-      roughness: 0.15,
-    });
-    this.trimMaterials.push(trimMat);
-
-    const cockpitMat = new THREE.MeshPhysicalMaterial({
-      color: 0x0284c7,
-      emissive: 0x38bdf8,
-      emissiveIntensity: 0.45,
-      metalness: 0.9,
-      roughness: 0.1,
-      transmission: 0.45,
-      transparent: true,
-      opacity: 0.92,
-      ior: 1.5,
-    });
-    this.cockpitMaterial = cockpitMat;
-
-    // 1. Central Aerodynamic Stealth Nose
-    const noseGeom = new THREE.ConeGeometry(0.75, 3.4, 7);
-    const nose = new THREE.Mesh(noseGeom, hullMat);
-    nose.rotation.x = Math.PI / 2;
-    nose.position.set(0, 0, 1.7);
-    nose.scale.set(1.15, 1.0, 0.6);
-    ship.add(nose);
-
-    // Mid Fuselage Body
-    const midBodyGeom = new THREE.BoxGeometry(1.4, 0.7, 2.8);
-    const midBody = new THREE.Mesh(midBodyGeom, armorMat);
-    midBody.position.set(0, 0, -0.4);
-    ship.add(midBody);
-
-    // 2. Cockpit Canopy (Faceted high-tech glass with glowing interior)
-    const canopyGeom = new THREE.ConeGeometry(0.5, 1.7, 5);
-    const canopy = new THREE.Mesh(canopyGeom, cockpitMat);
-    canopy.rotation.x = Math.PI / 2 + 0.16;
-    canopy.position.set(0, 0.45, 0.7);
-    canopy.scale.set(0.95, 1.0, 0.55);
-    ship.add(canopy);
-
-    // 3. Swept Stealth Wings (Angular 21st-century geometry)
-    const leftWingGeom = new THREE.BufferGeometry();
-    const wingVertices = new Float32Array([
-      0.65, 0.05, 0.8,
-      3.4, -0.05, -1.7,
-      0.65, -0.05, -1.9,
-
-      0.65, 0.05, 0.8,
-      3.4, -0.05, -1.7,
-      2.8, 0.05, 0.1,
-    ]);
-    leftWingGeom.setAttribute('position', new THREE.BufferAttribute(wingVertices, 3));
-    leftWingGeom.computeVertexNormals();
-
-    const leftWing = new THREE.Mesh(leftWingGeom, hullMat);
-    ship.add(leftWing);
-
-    const rightWing = leftWing.clone();
-    rightWing.scale.x = -1;
-    ship.add(rightWing);
-
-    // Wing Leading Edge Neon Circuit Trims
-    const wingTrimGeom = new THREE.BoxGeometry(2.8, 0.06, 0.14);
-    const leftTrim = new THREE.Mesh(wingTrimGeom, trimMat);
-    leftTrim.position.set(1.95, 0.02, -0.4);
-    leftTrim.rotation.y = -Math.PI * 0.24;
-    ship.add(leftTrim);
-
-    const rightTrim = leftTrim.clone();
-    rightTrim.position.x = -1.95;
-    rightTrim.rotation.y = Math.PI * 0.24;
-    ship.add(rightTrim);
-
-    // 4. Twin Canted Tail Fins / Vertical Stabilizers
-    const finGeom = new THREE.BufferGeometry();
-    const finVerts = new Float32Array([
-      0, 0, 0,
-      0.35, 1.2, -1.3,
-      0.0, 0.0, -1.5,
-    ]);
-    finGeom.setAttribute('position', new THREE.BufferAttribute(finVerts, 3));
-    finGeom.computeVertexNormals();
-
-    const leftFin = new THREE.Mesh(finGeom, armorMat);
-    leftFin.position.set(0.7, 0.25, -0.8);
-    leftFin.rotation.z = -0.32;
-    ship.add(leftFin);
-
-    const rightFin = leftFin.clone();
-    rightFin.position.x = -0.7;
-    rightFin.rotation.z = 0.32;
-    ship.add(rightFin);
-
-    // 5. Heavy Combat Weapon Hardpoints
-    const cannonGeom = new THREE.CylinderGeometry(0.09, 0.1, 2.4, 12);
-    const leftCannon = new THREE.Mesh(cannonGeom, armorMat);
-    leftCannon.rotation.x = Math.PI / 2;
-    leftCannon.position.set(1.5, -0.05, 0.55);
-    ship.add(leftCannon);
-    this.cannonMeshes.push(leftCannon);
-
-    const rightCannon = leftCannon.clone();
-    rightCannon.position.x = -1.5;
-    ship.add(rightCannon);
-    this.cannonMeshes.push(rightCannon);
-
-    // Dorsal Spine Hyper Laser Turret Emitter
-    const laserLensGeom = new THREE.SphereGeometry(0.2, 16, 16);
-    const laserLensMat = new THREE.MeshBasicMaterial({ color: 0xff37a6 });
-    const laserLens = new THREE.Mesh(laserLensGeom, laserLensMat);
-    laserLens.position.set(0, 0.42, -0.5);
-    ship.add(laserLens);
-    this.laserTurretMesh = laserLens;
-
-    // Laser Turret Capacitor Orbit Ring
-    const turretRingGeom = new THREE.TorusGeometry(0.35, 0.04, 8, 24);
-    const turretRingMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
-    const turretRing = new THREE.Mesh(turretRingGeom, turretRingMat);
-    turretRing.rotation.x = Math.PI / 2;
-    turretRing.position.set(0, 0.42, -0.5);
-    ship.add(turretRing);
-
-    // 6. Dual Ion Thrusters with Afterburner Cones
-    const engineGeom = new THREE.CylinderGeometry(0.3, 0.4, 1.5, 16);
-    const leftEngine = new THREE.Mesh(engineGeom, hullMat);
-    leftEngine.rotation.x = Math.PI / 2;
-    leftEngine.position.set(0.5, 0, -1.8);
-    ship.add(leftEngine);
-
-    const rightEngine = leftEngine.clone();
-    rightEngine.position.x = -0.5;
-    ship.add(rightEngine);
-
-    // Engine Core Glow Disks
-    const coreGeom = new THREE.CircleGeometry(0.28, 16);
-    const coreMat = new THREE.MeshBasicMaterial({ color: 0x67e8f9 });
-    const leftCore = new THREE.Mesh(coreGeom, coreMat);
-    leftCore.position.set(0.5, 0, -2.56);
-    leftCore.rotation.y = Math.PI;
-    ship.add(leftCore);
-
-    const rightCore = leftCore.clone();
-    rightCore.position.x = -0.5;
-    ship.add(rightCore);
-
-    // Volumetric Engine Plumes
-    const plumeGeom = new THREE.ConeGeometry(0.28, 2.6, 16);
-    const plumeMat = new THREE.MeshBasicMaterial({
-      color: 0x38bdf8,
-      transparent: true,
-      opacity: 0.8,
-      blending: THREE.AdditiveBlending,
-    });
-    this.enginePlumeMaterials.push(plumeMat);
-
-    const leftPlume = new THREE.Mesh(plumeGeom, plumeMat);
-    leftPlume.rotation.x = -Math.PI / 2;
-    leftPlume.position.set(0.5, 0, -3.6);
-    ship.add(leftPlume);
-    this.enginePlumes.push(leftPlume);
-
-    const rightPlume = leftPlume.clone();
-    rightPlume.position.x = -0.5;
-    ship.add(rightPlume);
-    this.enginePlumes.push(rightPlume);
-
-    // Engine Point Lights
-    const leftLight = new THREE.PointLight(0x38bdf8, 3.8, 9);
-    leftLight.position.set(0.5, 0, -2.6);
-    ship.add(leftLight);
-    this.engineLights.push(leftLight);
-
-    const rightLight = new THREE.PointLight(0x38bdf8, 3.8, 9);
-    rightLight.position.set(-0.5, 0, -2.6);
-    ship.add(rightLight);
-    this.engineLights.push(rightLight);
-
-    return ship;
+    return this.spaceship3D ? this.spaceship3D.mesh : new THREE.Group();
   }
 
   public setShipSkin(skinId: ShipSkinId) {
-    const config = SHIP_SKINS[skinId] || SHIP_SKINS.stealth;
-
-    for (const mat of this.hullMaterials) {
-      mat.color.setHex(config.hullColor);
-      mat.metalness = config.metalness;
-      mat.roughness = config.roughness;
-    }
-
-    for (const mat of this.armorMaterials) {
-      mat.color.setHex(config.armorColor);
-      mat.metalness = config.metalness * 0.95;
-      mat.roughness = config.roughness * 1.3;
-    }
-
-    for (const mat of this.trimMaterials) {
-      mat.color.setHex(config.trimColor);
-      mat.emissive.setHex(config.trimEmissive);
-    }
-
-    if (this.cockpitMaterial) {
-      this.cockpitMaterial.color.setHex(config.cockpitColor);
-      this.cockpitMaterial.emissive.setHex(config.trimColor);
-    }
-
-    for (const plumeMat of this.enginePlumeMaterials) {
-      plumeMat.color.setHex(config.engineGlow);
-    }
-
-    for (const light of this.engineLights) {
-      light.color.setHex(config.engineGlow);
+    if (this.spaceship3D) {
+      this.spaceship3D.setSkin(skinId);
     }
   }
 
@@ -725,6 +818,101 @@ export class SpaceHangarScene {
     const preset = CAMERA_PRESETS[presetName] || CAMERA_PRESETS.default;
     this.targetCameraPos = preset.position.clone();
     this.targetLookAt = preset.lookAt.clone();
+  }
+
+  // Cinematic Intro Fly-Through Methods
+  public startCinematicIntro(onComplete?: () => void) {
+    this.isCinematicIntro = true;
+    this.cinematicIntroTime = 0;
+    this.cinematicProgress = 0;
+    this.onIntroCompleteCallback = onComplete || null;
+    this.activePreset = 'cinematic';
+    this.isDragging = false;
+
+    const startPos = this.cameraPositionSpline.getPoint(0);
+    const startLook = this.cameraLookAtSpline.getPoint(0);
+    this.camera.position.copy(startPos);
+    this.currentLookAt.copy(startLook);
+    this.camera.lookAt(this.currentLookAt);
+    this.camera.fov = 62;
+    this.camera.rotation.z = 0;
+    this.camera.updateProjectionMatrix();
+  }
+
+  public skipCinematicIntro() {
+    if (!this.isCinematicIntro) return;
+    this.isCinematicIntro = false;
+    this.cinematicProgress = 1.0;
+    this.activePreset = 'default';
+    this.targetCameraPos.copy(CAMERA_PRESETS.default.position);
+    this.targetLookAt.copy(CAMERA_PRESETS.default.lookAt);
+    this.currentLookAt.copy(CAMERA_PRESETS.default.lookAt);
+    this.camera.position.copy(CAMERA_PRESETS.default.position);
+    this.camera.lookAt(CAMERA_PRESETS.default.lookAt);
+    this.camera.fov = 48;
+    this.camera.rotation.z = 0;
+    this.camera.updateProjectionMatrix();
+
+    if (this.onIntroCompleteCallback) {
+      const cb = this.onIntroCompleteCallback;
+      this.onIntroCompleteCallback = null;
+      cb();
+    }
+  }
+
+  public getCinematicTelemetry(): {
+    phase: string;
+    code: string;
+    title: string;
+    subtitle: string;
+    progress: number;
+    timeRemaining: string;
+    active: boolean;
+  } {
+    const p = Math.max(0, Math.min(1, this.cinematicProgress));
+    const rem = Math.max(0, this.cinematicDuration - this.cinematicIntroTime).toFixed(1);
+
+    if (p < 0.28) {
+      return {
+        phase: 'SYS-INIT',
+        code: 'HANGAR-APPROACH // SEC-09',
+        title: 'ORBITAL DOCKING BAY 09',
+        subtitle: 'Pre-flight gantry clearance verified • Overhead structural scan nominal',
+        progress: p,
+        timeRemaining: rem,
+        active: this.isCinematicIntro,
+      };
+    } else if (p < 0.54) {
+      return {
+        phase: 'PROPULSION',
+        code: 'DRIVE-CORE // MANIFOLD-SYNC',
+        title: 'TWIN ION PLASMA PROPULSION',
+        subtitle: 'Sub-light thruster chamber pressurized • Plasma exhaust vectoring locked',
+        progress: p,
+        timeRemaining: rem,
+        active: this.isCinematicIntro,
+      };
+    } else if (p < 0.80) {
+      return {
+        phase: 'AVIONICS',
+        code: 'SHIELD-ARRAY // DEFLECTOR-CAL',
+        title: 'TACTICAL SENSOR SUITE',
+        subtitle: 'Long-range radar synchronized • Laser cannons & missile racks primed',
+        progress: p,
+        timeRemaining: rem,
+        active: this.isCinematicIntro,
+      };
+    } else {
+      return {
+        phase: 'FLIGHT-READY',
+        code: 'CLEARANCE // ALL SYSTEMS GREEN',
+        title: 'ODYSSEY INTERCEPTOR READY',
+        subtitle: 'Pilot flight control online • Atmospheric forcefield cycle confirmed',
+        progress: p,
+        timeRemaining: rem,
+        active: this.isCinematicIntro,
+      };
+    }
   }
 
   // Engage 3D Hyperdrive launch warp sequence with behind-the-ship camera view!
@@ -766,6 +954,10 @@ export class SpaceHangarScene {
     const dom = container;
 
     const onMouseDown = (e: MouseEvent) => {
+      if (this.isCinematicIntro) {
+        this.skipCinematicIntro();
+        return;
+      }
       this.isDragging = true;
       this.previousMousePosition = { x: e.clientX, y: e.clientY };
     };
@@ -878,8 +1070,70 @@ export class SpaceHangarScene {
         cb();
         return;
       }
+    } else if (this.isCinematicIntro) {
+      this.cinematicIntroTime += delta;
+      this.cinematicProgress = Math.min(1.0, this.cinematicIntroTime / this.cinematicDuration);
+
+      // Smooth cubic hermite easing: p * p * (3 - 2 * p)
+      const p = this.cinematicProgress;
+      const easedP = p * p * (3 - 2 * p);
+
+      const targetPos = this.cameraPositionSpline.getPoint(easedP);
+      const targetLook = this.cameraLookAtSpline.getPoint(easedP);
+
+      // Smooth camera FOV transition: wide 62 deg descending gracefully to 48 deg
+      const targetFov = THREE.MathUtils.lerp(62, 48, Math.sin(p * Math.PI * 0.5));
+      this.camera.fov = targetFov;
+      this.camera.updateProjectionMatrix();
+
+      // Organic subtle cinematic drone sway
+      const sway = Math.sin(this.cinematicIntroTime * 1.5) * 0.05 * (1 - p);
+      this.camera.position.set(targetPos.x + sway * 0.4, targetPos.y, targetPos.z);
+      this.currentLookAt.copy(targetLook);
+      this.camera.lookAt(this.currentLookAt);
+
+      // Subtle dynamic camera bank/roll
+      const roll = Math.sin(p * Math.PI) * 0.032;
+      this.camera.rotation.z += roll;
+
+      // Starfighter idle & engine warmup glow during fly-through
+      const warmupPulse = 1.0 + Math.sin(time * 20) * 0.18;
+      for (const plume of this.enginePlumes) {
+        plume.scale.set(warmupPulse, 1.2 * warmupPulse, warmupPulse);
+      }
+      for (const light of this.engineLights) {
+        light.intensity = 3.2 + Math.sin(time * 22) * 1.0;
+      }
+
+      // Planetary & Cosmic Rotation
+      this.planetGroup.rotation.y = time * 0.012;
+      this.ringMesh.rotation.z = time * 0.03;
+      this.starParticles.rotation.y = time * 0.006;
+
+      // Completion check
+      if (this.cinematicProgress >= 1.0) {
+        this.isCinematicIntro = false;
+        this.activePreset = 'default';
+        this.targetCameraPos.copy(CAMERA_PRESETS.default.position);
+        this.targetLookAt.copy(CAMERA_PRESETS.default.lookAt);
+        this.currentLookAt.copy(CAMERA_PRESETS.default.lookAt);
+        this.camera.position.copy(CAMERA_PRESETS.default.position);
+        this.camera.lookAt(CAMERA_PRESETS.default.lookAt);
+        this.camera.fov = 48;
+        this.camera.rotation.z = 0;
+        this.camera.updateProjectionMatrix();
+
+        if (this.onIntroCompleteCallback) {
+          const cb = this.onIntroCompleteCallback;
+          this.onIntroCompleteCallback = null;
+          cb();
+        }
+      }
     } else {
       // Gentle Starfighter Idle Levitation
+      if (this.spaceship3D) {
+        this.spaceship3D.update(delta, true);
+      }
       const hoverY = Math.sin(time * 1.8) * 0.08;
       const hoverRoll = Math.sin(time * 1.3) * 0.03;
       const hoverPitch = Math.cos(time * 1.5) * 0.02;

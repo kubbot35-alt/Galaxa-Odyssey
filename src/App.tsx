@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { GameEngine } from './game/GameEngine';
-import { GameCanvas } from './components/GameCanvas';
 import { Modern3DGameCanvas } from './components/Modern3DGameCanvas';
 import { TouchControls } from './components/TouchControls';
 import { Modern3DMenu } from './components/Modern3DMenu';
@@ -16,7 +15,6 @@ import {
   Maximize2,
   RotateCcw,
   Trophy,
-  Compass,
 } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -26,7 +24,6 @@ export const App: React.FC = () => {
   const engine = useMemo(() => new GameEngine(forceUpdate), []);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [use3DMode, setUse3DMode] = useState(true);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -74,23 +71,6 @@ export const App: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* 3D / Retro Mode Toggle */}
-          <button
-            type="button"
-            onClick={() => {
-              soundEngine.playUiClick();
-              setUse3DMode((prev) => !prev);
-            }}
-            title="Przełącz tryb gry: Pełne 3D (XXI wiek) vs Retro Canvas (lata 80)"
-            className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-mono font-bold transition shadow-sm ${
-              use3DMode
-                ? 'bg-cyan-950/70 border-cyan-400/60 text-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.3)]'
-                : 'bg-amber-950/60 border-amber-500/50 text-amber-300'
-            }`}
-          >
-            <Compass size={14} className={use3DMode ? 'text-cyan-400' : 'text-amber-400'} />
-            <span>{use3DMode ? '3D UNIVERSE' : '80S RETRO'}</span>
-          </button>
 
           {/* Achievement Badges Trigger */}
           <button
@@ -180,39 +160,24 @@ export const App: React.FC = () => {
       {/* Main Game / Menu Area */}
       <main className="relative w-full flex flex-col items-center justify-center flex-1 my-auto">
         {isMenuState ? (
-          use3DMode ? (
-            <Modern3DMenu
-              engine={engine}
-              onLaunch={forceUpdate}
-              onStateUpdate={forceUpdate}
-              onSwitchToRetro={() => setUse3DMode(false)}
-            />
-          ) : (
-            <>
-              <GameCanvas engine={engine} onStateUpdate={forceUpdate} />
-              <TouchControls engine={engine} onStateUpdate={forceUpdate} />
-            </>
-          )
+          <Modern3DMenu
+            engine={engine}
+            onLaunch={forceUpdate}
+            onStateUpdate={forceUpdate}
+          />
         ) : (
-          use3DMode ? (
-            <>
-              <Modern3DGameCanvas
-                engine={engine}
-                onStateUpdate={forceUpdate}
-                selectedSkin={selectedSkin}
-                onReturnToHangar={() => {
-                  engine.returnToMenu();
-                  forceUpdate();
-                }}
-              />
-              <TouchControls engine={engine} onStateUpdate={forceUpdate} />
-            </>
-          ) : (
-            <>
-              <GameCanvas engine={engine} onStateUpdate={forceUpdate} />
-              <TouchControls engine={engine} onStateUpdate={forceUpdate} />
-            </>
-          )
+          <>
+            <Modern3DGameCanvas
+              engine={engine}
+              onStateUpdate={forceUpdate}
+              selectedSkin={selectedSkin}
+              onReturnToHangar={() => {
+                engine.returnToMenu();
+                forceUpdate();
+              }}
+            />
+            <TouchControls engine={engine} onStateUpdate={forceUpdate} />
+          </>
         )}
 
         {/* Real-time Achievement Toast */}

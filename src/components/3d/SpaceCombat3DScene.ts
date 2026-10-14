@@ -4,6 +4,7 @@ import { GameEngine, Enemy, Bullet, Bomb, PowerUp, Particle, PlayerState } from 
 import { EnemyType, WeaponMode, PowerUpType, GameState } from '../../types/game';
 import { GAME_WIDTH, GAME_HEIGHT, LASER_BEAM_WIDTH } from '../../game/constants';
 import { ShipSkinId } from './SpaceHangarScene';
+import { Spaceship3D } from './Spaceship3D';
 
 export type CameraViewMode = 'CHASE_3D' | 'TACTICAL_3D' | 'COCKPIT_3D';
 
@@ -49,6 +50,8 @@ export class SpaceCombat3DScene {
   private previousWave = 0;
 
   // 3D Objects
+  public p1Spaceship!: Spaceship3D;
+  public p2Spaceship!: Spaceship3D;
   private playerShipGroup: THREE.Group;
   private player2ShipGroup: THREE.Group;
   private playerShieldMesh: THREE.Mesh;
@@ -234,8 +237,11 @@ export class SpaceCombat3DScene {
     this.asteroidGroup = this.createDriftingAsteroids();
     this.scene.add(this.asteroidGroup);
 
-    // 5. Build Player 1 Starfighter
-    this.playerShipGroup = this.buildStarfighter(false);
+    // 5. Build Player 1 3D Spaceship
+    this.p1Spaceship = new Spaceship3D();
+    this.playerShipGroup = this.p1Spaceship.mesh;
+    this.playerEnginePlumes = this.p1Spaceship.engineFlames;
+    this.playerEngineLights = this.p1Spaceship.engineLights;
     this.scene.add(this.playerShipGroup);
 
     this.playerShieldMesh = this.createShieldBubble(0x38bdf8);
@@ -248,8 +254,17 @@ export class SpaceCombat3DScene {
     this.p1HealthBarMesh = p1BarObj.mesh;
     this.playerShipGroup.add(this.p1HealthBarMesh);
 
-    // Player 2 Starfighter (Co-op)
-    this.player2ShipGroup = this.buildStarfighter(true);
+    // Player 2 3D Spaceship (Co-op)
+    this.p2Spaceship = new Spaceship3D({
+      hullColor: 0x2e1065,
+      wingColor: 0x4c1d95,
+      cockpitColor: 0xf43f5e,
+      flameColor: 0xf43f5e,
+      isPlayer2: true,
+    });
+    this.player2ShipGroup = this.p2Spaceship.mesh;
+    this.player2EnginePlumes = this.p2Spaceship.engineFlames;
+    this.player2EngineLights = this.p2Spaceship.engineLights;
     this.player2ShipGroup.visible = false;
     this.scene.add(this.player2ShipGroup);
 
@@ -651,6 +666,9 @@ export class SpaceCombat3DScene {
   // Set skin liveries
   public setShipSkin(skinId: ShipSkinId) {
     this.activeSkinId = skinId;
+    if (this.p1Spaceship) {
+      this.p1Spaceship.setSkin(skinId);
+    }
     this.applyLiveries();
   }
 
@@ -900,198 +918,16 @@ export class SpaceCombat3DScene {
     return texture;
   }
 
-  // Build high-poly 3D Starfighter Model
+  // 3D Spaceship Factory
   private buildStarfighter(isPlayer2 = false): THREE.Group {
-    const ship = new THREE.Group();
-    const hullTexture = this.createHullTexture();
-
-    const hullMat = new THREE.MeshStandardMaterial({
-      color: isPlayer2 ? 0x2e1065 : 0x0f172a,
-      map: hullTexture,
-      metalness: 0.9,
-      roughness: 0.22,
-    });
-    if (isPlayer2) this.p2HullMaterials.push(hullMat);
-    else this.hullMaterials.push(hullMat);
-
-    const armorMat = new THREE.MeshStandardMaterial({
-      color: isPlayer2 ? 0x4c1d95 : 0x1e293b,
-      metalness: 0.88,
-      roughness: 0.32,
-    });
-    if (isPlayer2) this.p2ArmorMaterials.push(armorMat);
-    else this.armorMaterials.push(armorMat);
-
-    const trimMat = new THREE.MeshStandardMaterial({
-      color: isPlayer2 ? 0xf43f5e : 0x38bdf8,
-      emissive: isPlayer2 ? 0xe11d48 : 0x0284c7,
-      emissiveIntensity: 0.85,
-      metalness: 0.9,
-      roughness: 0.15,
-    });
-    if (isPlayer2) this.p2TrimMaterials.push(trimMat);
-    else this.trimMaterials.push(trimMat);
-
-    const cockpitMat = new THREE.MeshPhysicalMaterial({
-      color: isPlayer2 ? 0xf43f5e : 0x0284c7,
-      emissive: isPlayer2 ? 0xfb7185 : 0x38bdf8,
-      emissiveIntensity: 0.45,
-      metalness: 0.9,
-      roughness: 0.1,
-      transmission: 0.45,
-      transparent: true,
-      opacity: 0.92,
-    });
-    if (isPlayer2) this.p2CockpitMaterial = cockpitMat;
-    else this.cockpitMaterial = cockpitMat;
-
-    // 1. Aerodynamic Stealth Nose
-    const noseGeom = new THREE.ConeGeometry(0.55, 2.6, 7);
-    const nose = new THREE.Mesh(noseGeom, hullMat);
-    nose.rotation.x = Math.PI / 2;
-    nose.position.set(0, 0, 1.3);
-    nose.scale.set(1.15, 1.0, 0.6);
-    ship.add(nose);
-
-    // Mid Fuselage Body
-    const midBodyGeom = new THREE.BoxGeometry(1.1, 0.55, 2.2);
-    const midBody = new THREE.Mesh(midBodyGeom, armorMat);
-    midBody.position.set(0, 0, -0.3);
-    ship.add(midBody);
-
-    // 2. Cockpit Canopy Glass
-    const canopyGeom = new THREE.ConeGeometry(0.38, 1.4, 5);
-    const canopy = new THREE.Mesh(canopyGeom, cockpitMat);
-    canopy.rotation.x = Math.PI / 2 + 0.16;
-    canopy.position.set(0, 0.35, 0.5);
-    canopy.scale.set(0.95, 1.0, 0.55);
-    ship.add(canopy);
-
-    // 3. Swept Stealth Wings
-    const leftWingGeom = new THREE.BufferGeometry();
-    const wingVertices = new Float32Array([
-      0.5, 0.04, 0.6,
-      2.6, -0.04, -1.3,
-      0.5, -0.04, -1.5,
-
-      0.5, 0.04, 0.6,
-      2.6, -0.04, -1.3,
-      2.2, 0.04, 0.1,
-    ]);
-    leftWingGeom.setAttribute('position', new THREE.BufferAttribute(wingVertices, 3));
-    leftWingGeom.computeVertexNormals();
-
-    const leftWing = new THREE.Mesh(leftWingGeom, hullMat);
-    ship.add(leftWing);
-
-    const rightWing = leftWing.clone();
-    rightWing.scale.x = -1;
-    ship.add(rightWing);
-
-    // Wing Neon Trims
-    const trimGeom = new THREE.BoxGeometry(2.2, 0.05, 0.1);
-    const leftTrim = new THREE.Mesh(trimGeom, trimMat);
-    leftTrim.position.set(1.5, 0.02, -0.3);
-    leftTrim.rotation.y = -Math.PI * 0.24;
-    ship.add(leftTrim);
-
-    const rightTrim = leftTrim.clone();
-    rightTrim.position.x = -1.5;
-    rightTrim.rotation.y = Math.PI * 0.24;
-    ship.add(rightTrim);
-
-    // 4. Twin Canted Tail Fins
-    const finGeom = new THREE.BufferGeometry();
-    const finVerts = new Float32Array([
-      0, 0, 0,
-      0.28, 0.95, -1.0,
-      0.0, 0.0, -1.2,
-    ]);
-    finGeom.setAttribute('position', new THREE.BufferAttribute(finVerts, 3));
-    finGeom.computeVertexNormals();
-
-    const leftFin = new THREE.Mesh(finGeom, armorMat);
-    leftFin.position.set(0.55, 0.2, -0.6);
-    leftFin.rotation.z = -0.32;
-    ship.add(leftFin);
-
-    const rightFin = leftFin.clone();
-    rightFin.position.x = -0.55;
-    rightFin.rotation.z = 0.32;
-    ship.add(rightFin);
-
-    // 5. Heavy Combat Plasma Cannons
-    const cannonGeom = new THREE.CylinderGeometry(0.07, 0.08, 1.8, 10);
-    const leftCannon = new THREE.Mesh(cannonGeom, armorMat);
-    leftCannon.rotation.x = Math.PI / 2;
-    leftCannon.position.set(1.15, -0.04, 0.4);
-    ship.add(leftCannon);
-
-    const rightCannon = leftCannon.clone();
-    rightCannon.position.x = -1.15;
-    ship.add(rightCannon);
-
-    // Dorsal Turret Emitter
-    const turretGeom = new THREE.SphereGeometry(0.16, 16, 16);
-    const turretMat = new THREE.MeshBasicMaterial({ color: isPlayer2 ? 0xf43f5e : 0x38bdf8 });
-    const turret = new THREE.Mesh(turretGeom, turretMat);
-    turret.position.set(0, 0.35, -0.4);
-    ship.add(turret);
-
-    // 6. Dual Ion Thrusters with Afterburners
-    const engineGeom = new THREE.CylinderGeometry(0.24, 0.32, 1.2, 14);
-    const leftEngine = new THREE.Mesh(engineGeom, hullMat);
-    leftEngine.rotation.x = Math.PI / 2;
-    leftEngine.position.set(0.38, 0, -1.4);
-    ship.add(leftEngine);
-
-    const rightEngine = leftEngine.clone();
-    rightEngine.position.x = -0.38;
-    ship.add(rightEngine);
-
-    // Glowing Afterburner Plasma Cones
-    const plumeGeom = new THREE.ConeGeometry(0.22, 1.1, 12);
-    const plumeMat = new THREE.MeshBasicMaterial({
-      color: isPlayer2 ? 0xf43f5e : 0x38bdf8,
-      transparent: true,
-      opacity: 0.88,
-      blending: THREE.AdditiveBlending,
-    });
-
-    const leftPlume = new THREE.Mesh(plumeGeom, plumeMat);
-    leftPlume.rotation.x = -Math.PI / 2;
-    leftPlume.position.set(0.38, 0, -2.1);
-    ship.add(leftPlume);
-
-    const rightPlume = leftPlume.clone();
-    rightPlume.position.x = -0.38;
-    ship.add(rightPlume);
-
-    if (isPlayer2) {
-      this.player2EnginePlumes.push(leftPlume, rightPlume);
-      const leftLight = new THREE.PointLight(0xf43f5e, 3.5, 6);
-      leftLight.position.set(0.38, 0, -2.2);
-      ship.add(leftLight);
-      this.player2EngineLights.push(leftLight);
-
-      const rightLight = new THREE.PointLight(0xf43f5e, 3.5, 6);
-      rightLight.position.set(-0.38, 0, -2.2);
-      ship.add(rightLight);
-      this.player2EngineLights.push(rightLight);
-    } else {
-      this.playerEnginePlumes.push(leftPlume, rightPlume);
-      const leftLight = new THREE.PointLight(0x38bdf8, 3.5, 6);
-      leftLight.position.set(0.38, 0, -2.2);
-      ship.add(leftLight);
-      this.playerEngineLights.push(leftLight);
-
-      const rightLight = new THREE.PointLight(0x38bdf8, 3.5, 6);
-      rightLight.position.set(-0.38, 0, -2.2);
-      ship.add(rightLight);
-      this.playerEngineLights.push(rightLight);
-    }
-
-    return ship;
+    const ship = new Spaceship3D(isPlayer2 ? {
+      hullColor: 0x2e1065,
+      wingColor: 0x4c1d95,
+      cockpitColor: 0xf43f5e,
+      flameColor: 0xf43f5e,
+      isPlayer2: true,
+    } : undefined);
+    return ship.mesh;
   }
 
   // 3D Hexagonal Energy Deflector Shield
@@ -1373,6 +1209,9 @@ export class SpaceCombat3DScene {
       this.camera.fov = THREE.MathUtils.damp(this.camera.fov, 56, 4, delta);
       this.camera.updateProjectionMatrix();
     }
+
+    if (this.p1Spaceship) this.p1Spaceship.update(delta, true);
+    if (this.p2Spaceship) this.p2Spaceship.update(delta, true);
 
     // 3. Dynamic Visual Damage Detection for Player 1
     if (engine.player1.lives < this.prevP1Lives) {

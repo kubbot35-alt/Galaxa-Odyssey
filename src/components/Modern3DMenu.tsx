@@ -13,6 +13,7 @@ import {
   SHIP_SKINS,
   ShipSkinId,
 } from './3d/SpaceHangarScene';
+import { SpaceCinematicIntroOverlay } from './3d/SpaceCinematicIntroOverlay';
 import { soundEngine } from '../audio/soundEngine';
 import {
   Rocket,
@@ -30,6 +31,7 @@ import {
   Camera,
   Palette,
   RotateCw,
+  Film,
 } from 'lucide-react';
 
 interface Modern3DMenuProps {
@@ -59,17 +61,101 @@ export const Modern3DMenu: React.FC<Modern3DMenuProps> = ({
   const [isWarping, setIsWarping] = useState<boolean>(false);
   const [activeCameraPreset, setActiveCameraPreset] = useState<string>('default');
 
-  // Initialize Three.js 3D Hangar Scene
+  // Cinematic Intro Fly-Through State
+  const [isIntroPlaying, setIsIntroPlaying] = useState<boolean>(() => {
+    try {
+      return !sessionStorage.getItem('galaxa_intro_seen');
+    } catch {
+      return false;
+    }
+  });
+
+  const [introTelemetry, setIntroTelemetry] = useState(() => ({
+    phase: 'SYS-INIT',
+    code: 'HANGAR-APPROACH // SEC-09',
+    title: 'ORBITAL DOCKING BAY 09',
+    subtitle: 'Pre-flight gantry clearance verified • Overhead structural scan nominal',
+    progress: 0,
+    timeRemaining: '7.2',
+    active: false,
+  }));
+
+  // Initialize Three.js 3D Hangar Scene and Cinematic Intro
   useEffect(() => {
     if (!containerRef.current) return;
     const scene = new SpaceHangarScene(containerRef.current);
     sceneRef.current = scene;
 
+    if (isIntroPlaying) {
+      setIntroTelemetry({
+        ...scene.getCinematicTelemetry(),
+        active: true,
+      });
+      scene.startCinematicIntro(() => {
+        setIsIntroPlaying(false);
+        setIntroTelemetry((prev) => ({ ...prev, active: false }));
+        soundEngine.stopCinematicIntroSoundscape();
+        try {
+          sessionStorage.setItem('galaxa_intro_seen', 'true');
+        } catch {}
+      });
+      soundEngine.playCinematicIntroSoundscape();
+    } else {
+      setIntroTelemetry((prev) => ({ ...prev, active: false }));
+    }
+
+    const interval = setInterval(() => {
+      if (sceneRef.current) {
+        if (sceneRef.current.isCinematicIntro) {
+          setIntroTelemetry(sceneRef.current.getCinematicTelemetry());
+        } else {
+          setIntroTelemetry((prev) => (prev.active ? { ...prev, active: false } : prev));
+        }
+      }
+    }, 45);
+
     return () => {
+      clearInterval(interval);
+      soundEngine.stopCinematicIntroSoundscape();
       scene.dispose();
       sceneRef.current = null;
     };
   }, []);
+
+  const handleSkipIntro = () => {
+    soundEngine.playUiClick();
+    soundEngine.stopCinematicIntroSoundscape();
+    setIsIntroPlaying(false);
+    setIntroTelemetry((prev) => ({ ...prev, active: false }));
+    try {
+      sessionStorage.setItem('galaxa_intro_seen', 'true');
+    } catch {}
+    if (sceneRef.current) {
+      sceneRef.current.skipCinematicIntro();
+      setIntroTelemetry({
+        ...sceneRef.current.getCinematicTelemetry(),
+        active: false,
+      });
+    }
+  };
+
+  const handleReplayIntro = () => {
+    soundEngine.playUiClick();
+    setIsIntroPlaying(true);
+    setActiveTab('main');
+    if (sceneRef.current) {
+      setIntroTelemetry({
+        ...sceneRef.current.getCinematicTelemetry(),
+        active: true,
+      });
+      sceneRef.current.startCinematicIntro(() => {
+        setIsIntroPlaying(false);
+        setIntroTelemetry((prev) => ({ ...prev, active: false }));
+        soundEngine.stopCinematicIntroSoundscape();
+      });
+      soundEngine.playCinematicIntroSoundscape();
+    }
+  };
 
   // Update Camera focus based on active tab
   useEffect(() => {
@@ -118,6 +204,12 @@ export const Modern3DMenu: React.FC<Modern3DMenuProps> = ({
   };
 
   const handleStartMission = () => {
+    if (isIntroPlaying) {
+      soundEngine.stopCinematicIntroSoundscape();
+      setIsIntroPlaying(false);
+      setIntroTelemetry((prev) => ({ ...prev, active: false }));
+      if (sceneRef.current) sceneRef.current.skipCinematicIntro();
+    }
     soundEngine.playWarpJump();
     setIsWarping(true);
     engine.difficultyLevel = selectedDifficulty;
@@ -137,6 +229,12 @@ export const Modern3DMenu: React.FC<Modern3DMenuProps> = ({
   };
 
   const handleResumeSaved = () => {
+    if (isIntroPlaying) {
+      soundEngine.stopCinematicIntroSoundscape();
+      setIsIntroPlaying(false);
+      setIntroTelemetry((prev) => ({ ...prev, active: false }));
+      if (sceneRef.current) sceneRef.current.skipCinematicIntro();
+    }
     soundEngine.playWarpJump();
     setIsWarping(true);
 
@@ -152,6 +250,34 @@ export const Modern3DMenu: React.FC<Modern3DMenuProps> = ({
       onLaunch();
     }
   };
+
+  // Keyboard shortcut listener: Space or Enter to skip intro or start mission
+  useEffect(() => {
+    const handleMenuKeyDown = (e: KeyboardEvent) => {
+      if (engine.isAchievementsOpen) return;
+
+      if (e.code === 'Space' || e.key === 'Enter') {
+        if (isIntroPlaying && introTelemetry.active) {
+          e.preventDefault();
+          handleSkipIntro();
+        } else if (!isWarping && activeTab === 'main') {
+          e.preventDefault();
+          handleStartMission();
+        }
+      } else if (e.key === 'Escape') {
+        if (isIntroPlaying) {
+          e.preventDefault();
+          handleSkipIntro();
+        } else if (activeTab !== 'main') {
+          e.preventDefault();
+          setActiveTab('main');
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleMenuKeyDown);
+    return () => window.removeEventListener('keydown', handleMenuKeyDown);
+  }, [isIntroPlaying, introTelemetry.active, isWarping, activeTab, selectedDifficulty, selectedCoop]);
 
   const isUpgradeOwned = (option: UpgradeOption) => {
     switch (option) {
@@ -179,6 +305,14 @@ export const Modern3DMenu: React.FC<Modern3DMenuProps> = ({
         title="Click & Drag to Orbit 3D Starfighter • Scroll to Zoom"
       />
 
+      {/* Cinematic Intro 3D Fly-Through Letterbox Overlay */}
+      {isIntroPlaying && introTelemetry.active && (
+        <SpaceCinematicIntroOverlay
+          telemetry={introTelemetry}
+          onSkip={handleSkipIntro}
+        />
+      )}
+
       {/* Warp Jump Overlay Flash */}
       {isWarping && (
         <div className="absolute inset-0 z-30 pointer-events-none bg-cyan-400/20 animate-pulse backdrop-blur-[1px] transition-all duration-300 flex items-center justify-center">
@@ -194,7 +328,11 @@ export const Modern3DMenu: React.FC<Modern3DMenuProps> = ({
       )}
 
       {/* 2. Modern 21st-Century Holographic Diegetic HUD Overlay */}
-      <div className="relative z-10 w-full h-full flex flex-col justify-between p-3 sm:p-5 pointer-events-none">
+      <div
+        className={`relative z-10 w-full h-full flex flex-col justify-between p-3 sm:p-5 pointer-events-none transition-opacity duration-500 ${
+          isIntroPlaying && introTelemetry.active ? 'opacity-0 pointer-events-none' : 'opacity-100'
+        }`}
+      >
         {/* Top Telemetry Header */}
         <div className="flex items-start justify-between gap-3 pointer-events-auto">
           {/* Ship Identification Card */}
@@ -215,6 +353,18 @@ export const Modern3DMenu: React.FC<Modern3DMenuProps> = ({
             <span className="text-[10px] font-mono text-slate-400 mr-1 flex items-center gap-1">
               <Camera size={12} className="text-cyan-400" /> CAM:
             </span>
+
+            {/* Cinematic Intro Fly-Through Replay Button */}
+            <button
+              type="button"
+              onClick={handleReplayIntro}
+              title="Replay Cinematic 3D Hangar Fly-Through Sequence"
+              className="px-2 py-0.5 rounded text-[10px] font-mono transition flex items-center gap-1 bg-amber-950/70 text-amber-300 border border-amber-500/50 hover:bg-amber-900/80 hover:text-white font-bold shadow-[0_0_8px_rgba(245,158,11,0.25)]"
+            >
+              <Film size={11} className="text-amber-400" />
+              <span>INTRO</span>
+            </button>
+
             {[
               { id: 'default', label: '3/4 Hero' },
               { id: 'cockpit', label: 'Cockpit' },
@@ -315,27 +465,70 @@ export const Modern3DMenu: React.FC<Modern3DMenuProps> = ({
                 </button>
               )}
 
-              {/* Primary Action: Deploy Mission */}
+              {/* Primary Direct Launch Action: 1-Click to play! */}
               <button
                 type="button"
-                onClick={() => {
-                  soundEngine.playUiClick();
-                  setActiveTab('deploy');
-                }}
+                onClick={handleStartMission}
                 onMouseEnter={() => soundEngine.playUiHover()}
-                className="w-full group px-4 py-3 bg-gradient-to-r from-cyan-950/85 via-slate-900/90 to-slate-950/90 hover:from-cyan-900/85 hover:to-slate-900 border border-cyan-500/60 rounded-xl text-left transition-all duration-200 shadow-[0_0_25px_rgba(6,182,212,0.2)] flex items-center justify-between cursor-pointer"
+                disabled={isWarping}
+                className="w-full group px-4 py-3.5 bg-gradient-to-r from-cyan-500 via-sky-400 to-blue-600 hover:from-cyan-400 hover:to-blue-500 border border-cyan-300 rounded-xl text-left transition-all duration-200 shadow-[0_0_30px_rgba(56,189,248,0.55)] flex items-center justify-between cursor-pointer active:scale-98"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-cyan-500/20 border border-cyan-400/50 flex items-center justify-center text-cyan-300 group-hover:scale-105 transition-transform">
-                    <Crosshair size={18} />
+                  <div className="w-10 h-10 rounded-lg bg-slate-950/40 border border-white/50 flex items-center justify-center text-slate-950 group-hover:scale-110 transition-transform shadow-inner">
+                    <Rocket size={22} className="text-white fill-white" />
                   </div>
                   <div>
-                    <div className="text-xs sm:text-sm font-bold text-white font-mono">DEPLOY NEW MISSION</div>
-                    <div className="text-[11px] text-slate-300">Launch Solo Interceptor or 2P Co-op sortie</div>
+                    <div className="text-sm sm:text-base font-black text-slate-950 font-mono tracking-wider flex items-center gap-2">
+                      ROZPOCZNIJ MISJĘ
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-950/30 text-slate-950 font-bold border border-slate-950/20">
+                        [SPACJA / ENTER]
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-900 font-semibold">
+                      {selectedCoop ? 'Tryb 2P Co-op Wingman' : 'Tryb 1P Solo'} • Trudność: {selectedDifficulty}
+                    </div>
                   </div>
                 </div>
-                <ChevronRight size={18} className="text-cyan-400 group-hover:translate-x-1 transition-transform" />
+                <ChevronRight size={22} className="text-slate-950 group-hover:translate-x-1.5 transition-transform" />
               </button>
+
+              {/* Quick Settings Bar: Mode (1P/2P) & Threat Sector (Difficulty) */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundEngine.playUiClick();
+                    setSelectedCoop((prev) => !prev);
+                  }}
+                  onMouseEnter={() => soundEngine.playUiHover()}
+                  className="px-3 py-2 bg-slate-900/90 border border-slate-700 hover:border-cyan-400/80 rounded-xl flex items-center justify-between text-xs font-mono transition cursor-pointer"
+                >
+                  <span className="text-slate-400 text-[10px]">FORMACJA:</span>
+                  <span className="font-bold text-cyan-300 flex items-center gap-1">
+                    <Users size={12} /> {selectedCoop ? '2P CO-OP' : '1P SOLO'}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundEngine.playUiClick();
+                    setSelectedDifficulty((prev) =>
+                      prev === DifficultyLevel.EASY
+                        ? DifficultyLevel.NORMAL
+                        : prev === DifficultyLevel.NORMAL
+                        ? DifficultyLevel.HARD
+                        : DifficultyLevel.EASY
+                    );
+                  }}
+                  onMouseEnter={() => soundEngine.playUiHover()}
+                  className="px-3 py-2 bg-slate-900/90 border border-slate-700 hover:border-amber-400/80 rounded-xl flex items-center justify-between text-xs font-mono transition cursor-pointer"
+                >
+                  <span className="text-slate-400 text-[10px]">TRUDNOŚĆ:</span>
+                  <span className="font-bold text-amber-300">
+                    {selectedDifficulty}
+                  </span>
+                </button>
+              </div>
 
               {/* Ship Loadout & Hangar Upgrades */}
               <button
@@ -414,24 +607,6 @@ export const Modern3DMenu: React.FC<Modern3DMenuProps> = ({
                   <span>FLIGHT MANUAL</span>
                 </button>
               </div>
-
-              {/* Optional switch to retro 80s arcade button */}
-              {onSwitchToRetro && (
-                <div className="pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      soundEngine.playUiClick();
-                      onSwitchToRetro();
-                    }}
-                    onMouseEnter={() => soundEngine.playUiHover()}
-                    className="w-full py-1.5 px-3 rounded-lg border border-slate-800/80 bg-slate-950/60 hover:bg-slate-900/80 text-[10px] font-mono text-slate-400 hover:text-slate-300 transition flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <RotateCw size={12} />
-                    <span>COMPARE WITH VINTAGE 80S ARCADE MENU</span>
-                  </button>
-                </div>
-              )}
             </div>
           )}
 
