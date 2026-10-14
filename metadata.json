@@ -1,0 +1,8 @@
+{
+  "name": "Galaxa Odyssey",
+  "description": "Futuristic arcade space shooter game featuring waves of enemies, weapon upgrades, customizable difficulty, dynamic particle effects, and retro synthesizer audio.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

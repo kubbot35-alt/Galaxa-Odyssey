@@ -1,5 +1,0 @@
-package org.example.model;
-
-public enum GameState {
-    MENU, PLAYER_MODE_SELECTION, DIFFICULTY_SELECTION, UPGRADES, SETTINGS, HOW_TO_PLAY, PLAYING, PAUSED, GAMEOVER
-}

@@ -1,128 +1,47 @@
 # Galaxa Odyssey
 
-Galaxa Odyssey to futurystyczna gra typu arcade space shooter napisana w Javie z użyciem Swing. Gracz steruje statkiem kosmicznym, niszczy fale przeciwników, zbiera power-upy i rozwija uzbrojenie.
+Futuristic arcade space shooter web game rebuilt with React, TypeScript, Vite, HTML5 Canvas, and Web Audio API.
 
-## Funkcje
+## Features
 
-- futurystyczne menu główne z grafikami ładowanymi z `src/main/resources`,
-- tryby `PLAY`, `UPGRADES`, `SETTINGS` i `HOW TO PLAY`,
-- wybór poziomu trudności `EASY`, `NORMAL` lub `HARD` przed rozpoczęciem misji,
-- kolejne fale przeciwników o rosnącym poziomie trudności,
-- automatyczny ogień po przytrzymaniu klawisza `SPACE`,
-- różne typy przeciwników i pociski przeciwników,
-- osłona, życia, wynik, fale i kredyty,
-- ulepszenia broni: podwójne i potrójne działka,
-- power-upy zwiększające liczbę żyć lub poziom broni,
-- efekty dźwiękowe i generowana muzyka menu,
-- animowane gwiazdy, eksplozje i cząsteczki,
-- zapisany w GitHub przebieg rozwoju projektu.
+- **Futuristic Main Menu**: Retro space arcade styling with artwork, pilot profile, high scores, and credits.
+- **Game Modes**: Solo (1 Player) and Co-op Duel (2 Players) on a shared screen.
+- **Difficulty Selection**: `EASY`, `NORMAL`, and `HARD` mission profiles adjusting enemy aggression, fire rates, formations, and hazards.
+- **Continuous Fire & Weapon Tiers**:
+  - Hold `SPACE` (Player 1) or `F` (Player 2) for rapid-fire plasma cannons.
+  - Upgrades for Dual Cannons and Triple Spread Cannons.
+- **Hangar Ship Upgrades**: Purchase weapon upgrades, Double Lives, and Infinite Lives using earned mission points.
+- **Alien Formations & Dive Bombers**: Standard and Elite alien fighters with oscillating formations, dynamic dive sweeps, and laser attacks.
+- **Lethal Falling Bombs**: Heavy red planetary bombs with warning aura that can be destroyed with gunfire.
+- **Power-Ups**: Drops for Extra Lives (`L`) and Weapon Upgrades (`W`).
+- **Retro Web Audio Synthesizer**: Square-wave 16-note looping menu music, laser shoot sweep, explosion noise bursts, and power-up arpeggios.
+- **Visual FX**: Particle spark explosions, dynamic shield aura, and scrolling parallax starfield.
+- **Tactical Pause & Persistent Save**: Progress auto-saved to `localStorage` upon pausing or exiting, with instant resume.
 
-## Wymagania
+## Controls
 
-- Java 8 lub nowsza,
-- Maven 3.6 lub nowszy,
-- system z obsługą Java Swing.
+### Desktop Keyboard
 
-Projekt jest skonfigurowany do kompilacji z użyciem Java 8.
-
-Stan gry zapisuje się automatycznie przy wejściu w pauzę. Zapisywane są
-życia, poziom broni, punkty, etap, kredyty i odblokowane ulepszenia. Wybranie
-`PLAY` z menu wczytuje zapisany stan, jeśli istnieje. Plik zapisu znajduje się
-w pliku `out/save.json` w katalogu projektu. Stan jest
-również zapisywany przy zamknięciu okna gry.
-
-## Uruchomienie
-
-### Maven
-
-```bash
-mvn clean package
-```
-
-Następnie uruchom klasę `org.example.Main` z poziomu IDE albo użyj:
-
-```bash
-java -cp target/classes org.example.Main
-```
-
-### IntelliJ IDEA
-
-1. Otwórz projekt jako projekt Maven.
-2. Poczekaj na załadowanie zależności i konfiguracji.
-3. Uruchom klasę `org.example.Main`.
-
-## Sterowanie
-
-| Klawisz | Działanie |
+| Key | Action |
 |---|---|
-| `A` / `D` | ruch statku w lewo i w prawo |
-| `←` / `→` | ruch statku w lewo i w prawo |
-| `SPACE` | strzelanie; przytrzymanie włącza ogień ciągły |
-| `ESC` | pauza; w pauzie powrót do gry |
-| `↑` / `↓` | wybór pozycji w menu |
-| `ENTER` | zatwierdzenie wyboru; w pauzie zapis i powrót do menu |
+| `←` / `→` | Move Player 1 Ship |
+| `SPACE` | Fire Player 1 Weapons (hold for continuous fire) |
+| `A` / `D` | Move Player 2 Ship (Co-op Mode) |
+| `F` | Fire Player 2 Weapons (Co-op Mode) |
+| `ESC` | Pause game / Resume / Return |
+| `↑` / `↓` | Navigate Menu selections |
+| `ENTER` | Confirm selection / Save & Return |
 
-W menu można również korzystać z myszy.
+*Mouse and touch clicking are also supported across all menus and gameplay.*
 
-Po wybraniu `PLAY` pojawia się ekran poziomu trudności. Poziom można wybrać
-klawiszami `UP` / `DOWN` lub kliknięciem myszy, zatwierdzić klawiszem `ENTER`
-albo kliknięciem, a anulować klawiszem `ESC`. Poziom wpływa na liczbę i
-szybkość przeciwników, częstotliwość ich ognia, obrażenia oraz bomby.
+### Mobile & Touch
 
-## Struktura projektu
+On-screen virtual arcade touch buttons for steering, continuous firing, and tactical pause.
 
-```text
-src/
-├── main/
-│   ├── java/org/example/
-│   │   ├── model/
-│   │   │   ├── GameModel.java
-│   │   │   ├── GameState.java
-│   │   │   ├── GameObjectFactory.java
-│   │   │   ├── MenuOption.java
-│   │   │   ├── UpgradeOption.java
-│   │   │   ├── SettingsOption.java
-│   │   │   ├── EnemyType.java
-│   │   │   ├── PowerUpType.java
-│   │   │   ├── Player.java
-│   │   │   ├── Enemy.java
-│   │   │   ├── Bullet.java
-│   │   │   ├── PowerUp.java
-│   │   │   ├── Particle.java
-│   │   │   └── Star.java
-│   │   ├── controller/
-│   │   │   ├── Main.java
-│   │   │   └── GameController.java
-│   │   └── view/
-│   │       ├── GalagaGame.java
-│   │       ├── GamePanel.java
-│   │       ├── ResourceLoader.java
-│   │       └── SoundEffects.java
-│   └── resources/
-│       ├── menu/
-│       └── META-INF/
-└── ...
-```
+## Tech Stack
 
-Logika domenowa jest oddzielona od tworzenia obiektów i stanu interfejsu:
-`GameModel` przechowuje dane, `GameController` wykonuje akcje użytkownika,
-`GamePanel` renderuje widok, a `GameObjectFactory` centralizuje tworzenie
-obiektów gry. Klasy encji ukrywają swoje pola i udostępniają operacje
-biznesowe zamiast bezpośredniej modyfikacji stanu.
-
-## Licencja
-
-Projekt edukacyjny i demonstracyjny. Brak osobnej licencji komercyjnej.
-
-Ulepszenia profilu obejmuja rowniez podwojna liczbe zyc za 5000 punktow
-oraz nieskonczone zycia za 50000000 punktow. Zakupy sa zapisywane w profilu.
-
-### Aktualny podzial odpowiedzialnosci
-
-`GameModel` przechowuje stan i encje domenowe bez zaleznosci od Swing lub
-`Graphics2D`. `GameService`, `CollisionService` i `WaveService` wykonują
-aktualizacje rozgrywki, a `GameController` i `InputController` obsluguja
-akcje uzytkownika. Zapis jest ukryty za `GameSaveRepository`, tworzenie encji
-za `GameObjectFactory`, natomiast `GameRenderer`, `MenuRenderer` i
-`HudRenderer` odpowiadaja za rysowanie. Enumy w `model.enums` zastępują
-magiczne typy przeciwnikow, power-upow, dzwiekow i opcji menu.
+- **Runtime**: Node.js 22
+- **Framework**: React 18 + TypeScript + Vite
+- **Styling**: Tailwind CSS
+- **Audio**: Web Audio API (realtime synthesizer)
+- **Rendering**: HTML5 Canvas (60 FPS)
