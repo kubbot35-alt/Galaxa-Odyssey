@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GameEngine } from '../game/GameEngine';
-import { SpaceCombat3DScene, CameraViewMode } from './3d/SpaceCombat3DScene';
+import { SpaceCombat3DScene, CameraViewMode, ProjectedTarget } from './3d/SpaceCombat3DScene';
+import { SpaceCombatRadar } from './3d/SpaceCombatRadar';
+import { SpaceCombatLockOnHUD } from './3d/SpaceCombatLockOnHUD';
 import {
   GameState,
   WeaponMode,
@@ -21,6 +23,7 @@ import {
   ChevronRight,
   Flame,
   Radio,
+  Radar,
 } from 'lucide-react';
 import { ShipSkinId } from './3d/SpaceHangarScene';
 
@@ -41,6 +44,11 @@ export const Modern3DGameCanvas: React.FC<Modern3DGameCanvasProps> = ({
   const sceneRef = useRef<SpaceCombat3DScene | null>(null);
   const [viewMode, setViewMode] = useState<CameraViewMode>('CHASE_3D');
   const [isWarpActive, setIsWarpActive] = useState(false);
+  const [showRadar, setShowRadar] = useState(true);
+  const [targetTelemetry, setTargetTelemetry] = useState<{
+    targets: ProjectedTarget[];
+    primaryTarget: ProjectedTarget | null;
+  }>({ targets: [], primaryTarget: null });
   const [, setTick] = useState(0);
 
   // Initialize Three.js 3D Combat Scene
@@ -64,10 +72,12 @@ export const Modern3DGameCanvas: React.FC<Modern3DGameCanvasProps> = ({
       // 1. Update Game Engine Logic
       engine.update();
 
-      // 2. Synchronize 3D Scene
+      // 2. Synchronize 3D Scene & Target Locking Telemetry
       if (sceneRef.current) {
         sceneRef.current.syncWithEngine(engine);
         setIsWarpActive(sceneRef.current.isWarpJumping);
+        const data = sceneRef.current.getProjectedTargetData(engine);
+        setTargetTelemetry(data);
       }
 
       // Re-render React HUD at steady rate
@@ -91,7 +101,7 @@ export const Modern3DGameCanvas: React.FC<Modern3DGameCanvasProps> = ({
         return;
       }
 
-      // In-game weapon switching
+      // In-game weapon switching & view toggles
       if (engine.gameState === GameState.PLAYING) {
         if (e.key === '1') {
           engine.setWeaponMode(WeaponMode.STANDARD);
@@ -113,6 +123,9 @@ export const Modern3DGameCanvas: React.FC<Modern3DGameCanvasProps> = ({
           onStateUpdate();
         } else if (e.key === 'v' || e.key === 'V') {
           toggleViewMode();
+        } else if (e.key === 'r' || e.key === 'R') {
+          soundEngine.playUiClick();
+          setShowRadar((prev) => !prev);
         }
       }
 
@@ -239,6 +252,16 @@ export const Modern3DGameCanvas: React.FC<Modern3DGameCanvasProps> = ({
     >
       {/* 3D WebGL Three.js Container */}
       <div ref={containerRef} className="absolute inset-0 w-full h-full cursor-crosshair" />
+
+      {/* 3D-Space Target Distance & Locking Systems HUD Overlay */}
+      {engine.gameState === GameState.PLAYING && (
+        <SpaceCombatLockOnHUD
+          targets={targetTelemetry.targets}
+          primaryTarget={targetTelemetry.primaryTarget}
+          weaponMode={p1.weaponMode}
+          isTakingDamage={isTakingDamage}
+        />
+      )}
 
       {/* Diegetic 21st-Century Tactical HUD Overlay */}
       <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-4 font-mono">
@@ -397,19 +420,47 @@ export const Modern3DGameCanvas: React.FC<Modern3DGameCanvasProps> = ({
           </div>
         )}
 
-        {/* BOTTOM WEAPON SYSTEMS TACTICAL SELECTION BAR */}
+        {/* BOTTOM WEAPON SYSTEMS TACTICAL SELECTION BAR & 3D RADAR SCANNER */}
         <div className="w-full flex items-end justify-between gap-4 pointer-events-auto">
-          {/* Controls Reminder */}
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900/70 border border-slate-800 text-[11px] text-slate-400">
-            <span>[← / →] Ruch</span>
-            <span className="text-slate-600">•</span>
-            <span>[SPACJA] Ogień</span>
-            <span className="text-slate-600">•</span>
-            <span>[1-4 / Q, E] Broń</span>
-            <span className="text-slate-600">•</span>
-            <span>[V] Kamera 3D</span>
-            <span className="text-slate-600">•</span>
-            <span>[ESC] Pauza</span>
+          {/* Bottom-Left Corner: 3D-Space Radar Overlay & Quick Controls */}
+          <div className="flex flex-col items-start gap-1.5">
+            {showRadar && (
+              <div className="animate-in fade-in zoom-in-95 duration-150">
+                <SpaceCombatRadar
+                  targets={targetTelemetry.targets}
+                  primaryTarget={targetTelemetry.primaryTarget}
+                  wave={engine.wave}
+                />
+              </div>
+            )}
+
+            {/* Controls Bar & Radar Toggle */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900/85 backdrop-blur-md border border-slate-800 text-[10px] text-slate-400">
+              <button
+                type="button"
+                onClick={() => {
+                  soundEngine.playUiClick();
+                  setShowRadar((r) => !r);
+                }}
+                className={`flex items-center gap-1 font-bold px-1.5 py-0.5 rounded transition ${
+                  showRadar
+                    ? 'bg-cyan-950 text-cyan-300 border border-cyan-500/40 shadow-[0_0_8px_rgba(6,182,212,0.3)]'
+                    : 'text-slate-400 hover:text-white bg-slate-800/60'
+                }`}
+                title="Przełącz Radar 3D (Klawisz R)"
+              >
+                <Radar size={11} className={showRadar ? 'text-cyan-400 animate-spin' : ''} style={{ animationDuration: '4s' }} />
+                <span>RADAR [R]</span>
+              </button>
+              <span className="text-slate-600 hidden sm:inline">•</span>
+              <span className="hidden sm:inline">[←/→] Ruch</span>
+              <span className="text-slate-600 hidden sm:inline">•</span>
+              <span className="hidden sm:inline">[SPACJA] Ogień</span>
+              <span className="text-slate-600 hidden sm:inline">•</span>
+              <span className="hidden sm:inline">[1-4] Broń</span>
+              <span className="text-slate-600 hidden sm:inline">•</span>
+              <span className="hidden sm:inline">[V] Widok</span>
+            </div>
           </div>
 
           {/* Weapon Modes Quick-Switch Array */}

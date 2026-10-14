@@ -7,6 +7,25 @@ import { ShipSkinId } from './SpaceHangarScene';
 
 export type CameraViewMode = 'CHASE_3D' | 'TACTICAL_3D' | 'COCKPIT_3D';
 
+export interface ProjectedTarget {
+  id: string;
+  type: EnemyType;
+  screenX: number;
+  screenY: number;
+  screenPercentX: number;
+  screenPercentY: number;
+  inView: boolean;
+  distanceUnits: number;
+  distanceMeters: number;
+  relativeVelocity: number;
+  radarX: number;
+  radarZ: number;
+  hp: number;
+  maxHp: number;
+  isDiving: boolean;
+  enemyRef: Enemy;
+}
+
 export class SpaceCombat3DScene {
   private container: HTMLElement;
   private renderer: THREE.WebGLRenderer;
@@ -1833,6 +1852,88 @@ export class SpaceCombat3DScene {
     this.renderer.render(this.scene, this.camera);
     this.animFrameId = requestAnimationFrame(this.animate);
   };
+
+  public getProjectedTargetData(engine: GameEngine): {
+    targets: ProjectedTarget[];
+    primaryTarget: ProjectedTarget | null;
+  } {
+    const targets: ProjectedTarget[] = [];
+    if (!engine || !engine.enemies || engine.enemies.length === 0) {
+      return { targets: [], primaryTarget: null };
+    }
+
+    const p1Pos = this.playerShipGroup
+      ? this.playerShipGroup.position
+      : this.map2Dto3D(engine.player1.x + engine.player1.width / 2, engine.player1.y);
+
+    const canvasWidth = this.container.clientWidth || 1000;
+    const canvasHeight = this.container.clientHeight || 640;
+
+    let bestScore = Infinity;
+    let primaryTarget: ProjectedTarget | null = null;
+
+    for (let i = 0; i < engine.enemies.length; i++) {
+      const enemy = engine.enemies[i];
+      const pos = this.map2Dto3D(enemy.x + 16, enemy.y + 16);
+
+      const dx = pos.x - p1Pos.x;
+      const dz = pos.z - p1Pos.z;
+      const distUnits = Math.hypot(dx, dz);
+      const distMeters = Math.round(distUnits * 32 + 120);
+
+      // Closing velocity in m/s (negative means closing in)
+      const relativeVel = enemy.diving ? -145 : -38;
+
+      // Project into 3D camera screen space
+      const v = pos.clone();
+      v.y = 0.3; // enemy hull center
+      v.project(this.camera);
+
+      const inFront = v.z < 1.0;
+      const screenX = ((v.x + 1) / 2) * canvasWidth;
+      const screenY = ((-v.y + 1) / 2) * canvasHeight;
+      const screenPercentX = ((v.x + 1) / 2) * 100;
+      const screenPercentY = ((-v.y + 1) / 2) * 100;
+      const inView = inFront && v.x >= -1.15 && v.x <= 1.15 && v.y >= -1.15 && v.y <= 1.15;
+
+      // Normalized radar relative coordinates (-1..1 horizontal, 0..1 downrange)
+      const radarX = THREE.MathUtils.clamp(dx / 12, -1, 1);
+      const radarZ = THREE.MathUtils.clamp(dz / 26, 0, 1);
+
+      const projected: ProjectedTarget = {
+        id: `tgt-${enemy.type}-${Math.round(enemy.startX)}-${i}`,
+        type: enemy.type,
+        screenX,
+        screenY,
+        screenPercentX,
+        screenPercentY,
+        inView,
+        distanceUnits: distUnits,
+        distanceMeters: distMeters,
+        relativeVelocity: relativeVel,
+        radarX,
+        radarZ,
+        hp: enemy.hp,
+        maxHp: enemy.maxHp,
+        isDiving: !!enemy.diving,
+        enemyRef: enemy,
+      };
+
+      targets.push(projected);
+
+      // Boresight lock scoring: prioritize targets closest to forward firing axis
+      let score = Math.abs(dx) * 2.2 + distUnits * 0.8;
+      if (enemy.diving) score -= 8.0; // Urgent diving threat
+      if (enemy.type === EnemyType.ELITE) score -= 3.0;
+
+      if (score < bestScore) {
+        bestScore = score;
+        primaryTarget = projected;
+      }
+    }
+
+    return { targets, primaryTarget };
+  }
 
   public dispose() {
     if (this.animFrameId !== null) {
