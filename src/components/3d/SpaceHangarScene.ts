@@ -727,16 +727,38 @@ export class SpaceHangarScene {
     this.targetLookAt = preset.lookAt.clone();
   }
 
-  // Engage 3D Hyperdrive launch warp sequence!
+  // Engage 3D Hyperdrive launch warp sequence with behind-the-ship camera view!
   public triggerHyperdriveLaunch(onComplete: () => void) {
     this.isWarping = true;
     this.warpTime = 0;
     this.onWarpCompleteCallback = onComplete;
     this.warpLinesGroup.visible = true;
 
+    // Immediately snap camera to DIRECTLY BEHIND THE SHIP (3D Chase view!)
+    this.camera.position.set(
+      this.shipGroup.position.x,
+      this.shipGroup.position.y + 1.35,
+      this.shipGroup.position.z - 4.8
+    );
+    this.targetCameraPos.set(
+      this.shipGroup.position.x,
+      this.shipGroup.position.y + 1.35,
+      this.shipGroup.position.z - 4.8
+    );
+    this.targetLookAt.set(
+      this.shipGroup.position.x,
+      this.shipGroup.position.y + 0.35,
+      this.shipGroup.position.z + 30
+    );
+    this.currentLookAt.copy(this.targetLookAt);
+    this.camera.lookAt(this.targetLookAt);
+
     // Flare engines to maximum afterburner
     for (const light of this.engineLights) {
-      light.intensity = 12.0;
+      light.intensity = 18.0;
+    }
+    for (const plume of this.enginePlumes) {
+      plume.scale.set(2.8, 3.6, 2.8);
     }
   }
 
@@ -812,23 +834,44 @@ export class SpaceHangarScene {
     if (this.isWarping) {
       this.warpTime += delta;
 
-      // 1. Ship tilt down & shoot forward into hyperspace
-      this.shipGroup.rotation.x = THREE.MathUtils.damp(this.shipGroup.rotation.x, 0.45, 8, delta);
-      this.shipGroup.position.z += this.warpTime * 45 * delta;
+      // 1. Ship tilt forward & accelerate violently into hyperspace (+Z)
+      this.shipGroup.rotation.x = THREE.MathUtils.damp(this.shipGroup.rotation.x, -0.06, 6, delta);
+      this.shipGroup.position.z += this.warpTime * 65 * delta;
 
-      // 2. Camera sudden pull back with field of view expansion
-      this.camera.fov = THREE.MathUtils.damp(this.camera.fov, 78, 6, delta);
+      // 2. Camera stays tightly locked DIRECTLY BEHIND the ship in full 3D chase view!
+      const shakeX = (Math.random() - 0.5) * 0.06 * Math.min(1, this.warpTime * 2);
+      const shakeY = (Math.random() - 0.5) * 0.06 * Math.min(1, this.warpTime * 2);
+
+      this.camera.position.set(
+        this.shipGroup.position.x + shakeX,
+        this.shipGroup.position.y + 1.35 + shakeY,
+        this.shipGroup.position.z - 4.8
+      );
+      this.camera.lookAt(
+        this.shipGroup.position.x,
+        this.shipGroup.position.y + 0.35,
+        this.shipGroup.position.z + 40
+      );
+
+      // 3. Camera FOV dynamic warp tunnel stretch
+      this.camera.fov = THREE.MathUtils.damp(this.camera.fov, 86, 5, delta);
       this.camera.updateProjectionMatrix();
 
-      // 3. Warp Lines streaming towards camera
+      // 4. Warp Lines streaming backwards past camera
       const posAttr = this.warpLinesGroup.children[0] as THREE.LineSegments;
       if (posAttr) {
-        posAttr.position.z += 120 * delta;
-        if (posAttr.position.z > 60) posAttr.position.z = -40;
+        posAttr.position.z -= 180 * delta;
+        if (posAttr.position.z < -60) posAttr.position.z = 40;
       }
 
-      // Finish jump after ~0.85s
-      if (this.warpTime > 0.85 && this.onWarpCompleteCallback) {
+      // 5. Thrusters maximum burn
+      const pulse = 2.4 + Math.sin(time * 30) * 0.4;
+      for (const plume of this.enginePlumes) {
+        plume.scale.set(pulse, 3.2, pulse);
+      }
+
+      // Finish jump after ~0.95s
+      if (this.warpTime > 0.95 && this.onWarpCompleteCallback) {
         const cb = this.onWarpCompleteCallback;
         this.onWarpCompleteCallback = null;
         this.isWarping = false;

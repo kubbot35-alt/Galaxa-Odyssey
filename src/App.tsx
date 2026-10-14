@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { GameEngine } from './game/GameEngine';
 import { GameCanvas } from './components/GameCanvas';
+import { Modern3DGameCanvas } from './components/Modern3DGameCanvas';
 import { TouchControls } from './components/TouchControls';
 import { Modern3DMenu } from './components/Modern3DMenu';
 import { AchievementsOverlay } from './components/AchievementsOverlay';
 import { AchievementToast } from './components/AchievementToast';
 import { soundEngine } from './audio/soundEngine';
 import { GameState } from './types/game';
+import { ShipSkinId } from './components/3d/SpaceHangarScene';
 import {
   Volume2,
   VolumeX,
@@ -24,7 +26,7 @@ export const App: React.FC = () => {
   const engine = useMemo(() => new GameEngine(forceUpdate), []);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [use3DMenu, setUse3DMenu] = useState(true);
+  const [use3DMode, setUse3DMode] = useState(true);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -53,10 +55,12 @@ export const App: React.FC = () => {
     GameState.HOW_TO_PLAY,
   ].includes(engine.gameState);
 
+  const selectedSkin = (typeof window !== 'undefined' && localStorage.getItem('galaxa_ship_skin') as ShipSkinId) || 'titanium';
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-between p-2 sm:p-4 selection:bg-cyan-500 selection:text-black">
       {/* Top Bar Header */}
-      <header className="w-full max-w-[900px] flex items-center justify-between py-2 px-3 bg-slate-900/60 backdrop-blur border border-slate-800 rounded-xl mb-2">
+      <header className="w-full max-w-[1000px] flex items-center justify-between py-2 px-3 bg-slate-900/60 backdrop-blur border border-slate-800 rounded-xl mb-2">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-purple-600 flex items-center justify-center font-black text-sm shadow-[0_0_10px_rgba(55,245,255,0.4)]">
             GO
@@ -65,27 +69,27 @@ export const App: React.FC = () => {
             <h1 className="text-sm sm:text-base font-black tracking-wider text-cyan-400 font-mono">
               GALAXA ODYSSEY
             </h1>
-            <p className="text-[10px] text-slate-400">21st-Century Orbital Fighter & Combat Defense</p>
+            <p className="text-[10px] text-slate-400">21st-Century 3D Orbital Space Combat</p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* 3D / Retro Menu Mode Toggle */}
+          {/* 3D / Retro Mode Toggle */}
           <button
             type="button"
             onClick={() => {
               soundEngine.playUiClick();
-              setUse3DMenu((prev) => !prev);
+              setUse3DMode((prev) => !prev);
             }}
-            title="Toggle Menu View: 21st-Century 3D Hangar vs Retro 80s"
+            title="Przełącz tryb gry: Pełne 3D (XXI wiek) vs Retro Canvas (lata 80)"
             className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-mono font-bold transition shadow-sm ${
-              use3DMenu
+              use3DMode
                 ? 'bg-cyan-950/70 border-cyan-400/60 text-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.3)]'
                 : 'bg-amber-950/60 border-amber-500/50 text-amber-300'
             }`}
           >
-            <Compass size={14} className={use3DMenu ? 'text-cyan-400' : 'text-amber-400'} />
-            <span>{use3DMenu ? '3D VIEW' : '80S RETRO'}</span>
+            <Compass size={14} className={use3DMode ? 'text-cyan-400' : 'text-amber-400'} />
+            <span>{use3DMode ? '3D UNIVERSE' : '80S RETRO'}</span>
           </button>
 
           {/* Achievement Badges Trigger */}
@@ -154,10 +158,11 @@ export const App: React.FC = () => {
           <button
             type="button"
             onClick={() => {
-              if (window.confirm('Reset local save data, achievements, and restart profile?')) {
+              if (window.confirm('Zresetować dane zapisu gry, osiągnięcia i profil?')) {
                 engine.clearSavedGame();
                 localStorage.removeItem('galaxa_odyssey_achievements');
                 localStorage.removeItem('galaxa_odyssey_profile');
+                localStorage.removeItem('galaxa_ship_skin');
                 engine.loadAchievements();
                 engine.loadProfile();
                 engine.returnToMenu();
@@ -174,18 +179,40 @@ export const App: React.FC = () => {
 
       {/* Main Game / Menu Area */}
       <main className="relative w-full flex flex-col items-center justify-center flex-1 my-auto">
-        {isMenuState && use3DMenu ? (
-          <Modern3DMenu
-            engine={engine}
-            onLaunch={forceUpdate}
-            onStateUpdate={forceUpdate}
-            onSwitchToRetro={() => setUse3DMenu(false)}
-          />
+        {isMenuState ? (
+          use3DMode ? (
+            <Modern3DMenu
+              engine={engine}
+              onLaunch={forceUpdate}
+              onStateUpdate={forceUpdate}
+              onSwitchToRetro={() => setUse3DMode(false)}
+            />
+          ) : (
+            <>
+              <GameCanvas engine={engine} onStateUpdate={forceUpdate} />
+              <TouchControls engine={engine} onStateUpdate={forceUpdate} />
+            </>
+          )
         ) : (
-          <>
-            <GameCanvas engine={engine} onStateUpdate={forceUpdate} />
-            <TouchControls engine={engine} onStateUpdate={forceUpdate} />
-          </>
+          use3DMode ? (
+            <>
+              <Modern3DGameCanvas
+                engine={engine}
+                onStateUpdate={forceUpdate}
+                selectedSkin={selectedSkin}
+                onReturnToHangar={() => {
+                  engine.returnToMenu();
+                  forceUpdate();
+                }}
+              />
+              <TouchControls engine={engine} onStateUpdate={forceUpdate} />
+            </>
+          ) : (
+            <>
+              <GameCanvas engine={engine} onStateUpdate={forceUpdate} />
+              <TouchControls engine={engine} onStateUpdate={forceUpdate} />
+            </>
+          )
         )}
 
         {/* Real-time Achievement Toast */}
@@ -210,21 +237,23 @@ export const App: React.FC = () => {
       </main>
 
       {/* Footer Navigation Info */}
-      <footer className="w-full max-w-[900px] mt-2 py-2 px-3 text-center text-[11px] text-slate-400 bg-slate-900/40 rounded-lg border border-slate-800/80 flex flex-wrap items-center justify-between gap-2">
+      <footer className="w-full max-w-[1000px] mt-2 py-2 px-3 text-center text-[11px] text-slate-400 bg-slate-900/40 rounded-lg border border-slate-800/80 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="text-cyan-400 font-mono font-semibold">Controls:</span>
-          <span>P1: ← / → + Space</span>
+          <span className="text-cyan-400 font-mono font-semibold">Sterowanie 3D:</span>
+          <span>P1: ← / → + Spacja</span>
           <span className="text-slate-600">|</span>
-          <span>Weapons: 1-4 / Q, E</span>
+          <span>Broń: 1-4 / Q, E</span>
+          <span className="text-slate-600">|</span>
+          <span>Kamera: V</span>
           <span className="text-slate-600">|</span>
           <span>P2: A / D + F</span>
           <span className="text-slate-600">|</span>
-          <span>Badges: B</span>
+          <span>Odznaki: B</span>
           <span className="text-slate-600">|</span>
-          <span>Pause: ESC</span>
+          <span>Pauza: ESC</span>
         </div>
         <div className="text-slate-500 font-mono text-[10px]">
-          Galaxa Odyssey 21st-Century Edition • 3D Hangar Active
+          Galaxa Odyssey 21st-Century 3D Combat Active • Widok zza statku
         </div>
       </footer>
     </div>

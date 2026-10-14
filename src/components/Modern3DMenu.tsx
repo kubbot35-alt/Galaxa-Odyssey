@@ -53,7 +53,9 @@ export const Modern3DMenu: React.FC<Modern3DMenuProps> = ({
   const [activeTab, setActiveTab] = useState<MenuTab>('main');
   const [selectedDifficulty, setSelectedDifficulty] = useState<DifficultyLevel>(engine.difficultyLevel);
   const [selectedCoop, setSelectedCoop] = useState<boolean>(engine.twoPlayerMode);
-  const [activeSkin, setActiveSkin] = useState<ShipSkinId>('stealth');
+  const [activeSkin, setActiveSkin] = useState<ShipSkinId>(() => {
+    return (localStorage.getItem('galaxa_ship_skin') as ShipSkinId) || 'titanium';
+  });
   const [isWarping, setIsWarping] = useState<boolean>(false);
   const [activeCameraPreset, setActiveCameraPreset] = useState<string>('default');
 
@@ -107,6 +109,9 @@ export const Modern3DMenu: React.FC<Modern3DMenuProps> = ({
   const handleSkinChange = (skinId: ShipSkinId) => {
     soundEngine.playUiClick();
     setActiveSkin(skinId);
+    try {
+      localStorage.setItem('galaxa_ship_skin', skinId);
+    } catch {}
     if (sceneRef.current) {
       sceneRef.current.setShipSkin(skinId);
     }
