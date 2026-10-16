@@ -30,6 +30,7 @@ import {
 } from './constants';
 import { soundEngine } from '../audio/soundEngine';
 import { ACHIEVEMENTS, Achievement, AchievementProgress } from '../types/achievements';
+import { InputManager } from './input/InputManager';
 
 export interface Star {
   x: number;
@@ -103,6 +104,8 @@ export interface PlayerState {
   isLaserActive?: boolean;
   movingLeft: boolean;
   movingRight: boolean;
+  movingUp?: boolean;
+  movingDown?: boolean;
   lastHitTime?: number;
   recentDamageTaken?: number;
   damageFlash?: number; // 0.0 to 1.0 (flashing intensity)
@@ -179,6 +182,13 @@ export class GameEngine {
   // Weapon Announcement
   public weaponAnnouncement: WeaponAnnouncement | null = null;
 
+  // Input Manager
+  private _inputManager: InputManager = new InputManager();
+
+  public get inputManager(): InputManager {
+    return this._inputManager;
+  }
+
   private onStateChange?: () => void;
 
   constructor(onStateChange?: () => void) {
@@ -187,6 +197,62 @@ export class GameEngine {
     this.loadProfile();
     this.loadAchievements();
     this.resetPlayers();
+    this.setupInputHandlers();
+  }
+
+  private setupInputHandlers() {
+    this._inputManager.setOnWeaponCycle((dir: 1 | -1) => {
+      if (this.gameState === GameState.PLAYING) {
+        this.cycleWeaponMode(dir);
+      }
+    });
+
+    this._inputManager.setOnWeaponSelect((modeIdx: number) => {
+      if (this.gameState === GameState.PLAYING) {
+        const modes = [
+          WeaponMode.STANDARD,
+          WeaponMode.TRIPLE_SHOT,
+          WeaponMode.LASER_BEAM,
+          WeaponMode.PLASMA_SPREAD,
+        ];
+        if (modes[modeIdx]) {
+          this.setWeaponMode(modes[modeIdx]);
+        }
+      }
+    });
+
+    this._inputManager.setOnPauseToggle(() => {
+      if (this.gameState === GameState.PLAYING) {
+        this.pauseGame();
+      } else if (this.gameState === GameState.PAUSED) {
+        this.resumeGame();
+      }
+    });
+
+    this._inputManager.setOnAchievementsToggle(() => {
+      this.toggleAchievements();
+    });
+
+    this._inputManager.setOnFireStart((pIdx: number) => {
+      if (this.gameState === GameState.PLAYING) {
+        if (pIdx === 1) {
+          this.spaceHeld = true;
+          if (this.fireCooldown === 0) this.firePlayer1();
+        } else if (pIdx === 2 && this.twoPlayerMode) {
+          this.secondPlayerFireHeld = true;
+          if (this.secondPlayerFireCooldown === 0) this.firePlayer2();
+        }
+      }
+    });
+
+    this._inputManager.setOnFireEnd((pIdx: number) => {
+      if (pIdx === 1) {
+        this.spaceHeld = false;
+        this.player1.isLaserActive = false;
+      } else if (pIdx === 2) {
+        this.secondPlayerFireHeld = false;
+      }
+    });
   }
 
   private initStars() {
@@ -436,61 +502,49 @@ export class GameEngine {
   }
 
   public resetPlayers() {
-    const startLives = this.infiniteLives ? 999 : this.doubleLives ? 6 : 3;
-    const initialWeapon = Math.max(1, this.ownedWeaponLevel);
-
     this.player1 = {
       x: GAME_WIDTH / 2 - PLAYER_WIDTH / 2,
-      y: GAME_HEIGHT - 80,
+      y: GAME_HEIGHT - PLAYER_HEIGHT - 30,
       width: PLAYER_WIDTH,
       height: PLAYER_HEIGHT,
-      lives: startLives,
-      maxLives: startLives,
+      lives: this.infiniteLives ? 999999 : this.doubleLives ? 6 : 3,
       shield: MAX_SHIELD,
       score: 0,
-      weaponLevel: initialWeapon,
+      weaponLevel: this.ownedWeaponLevel,
       weaponMode: WeaponMode.STANDARD,
       unlockedWeaponModes: [WeaponMode.STANDARD],
       weaponEnergy: MAX_WEAPON_ENERGY,
-      isLaserActive: false,
       movingLeft: false,
       movingRight: false,
-      lastHitTime: 0,
-      recentDamageTaken: 0,
-      damageFlash: 0,
-      shieldLag: MAX_SHIELD,
-      hitNotice: undefined,
-      hitNoticeTimer: 0,
+      movingUp: false,
+      movingDown: false,
     };
 
     if (this.twoPlayerMode) {
       this.player1.x = GAME_WIDTH / 2 - PLAYER_WIDTH - 30;
       this.player2 = {
         x: GAME_WIDTH / 2 + 30,
-        y: GAME_HEIGHT - 80,
+        y: GAME_HEIGHT - PLAYER_HEIGHT - 30,
         width: PLAYER_WIDTH,
         height: PLAYER_HEIGHT,
-        lives: startLives,
-        maxLives: startLives,
+        lives: this.infiniteLives ? 999999 : this.doubleLives ? 6 : 3,
         shield: MAX_SHIELD,
         score: 0,
-        weaponLevel: initialWeapon,
+        weaponLevel: this.ownedWeaponLevel,
         weaponMode: WeaponMode.STANDARD,
         unlockedWeaponModes: [WeaponMode.STANDARD],
         weaponEnergy: MAX_WEAPON_ENERGY,
-        isLaserActive: false,
         movingLeft: false,
         movingRight: false,
-        lastHitTime: 0,
-        recentDamageTaken: 0,
-        damageFlash: 0,
-        shieldLag: MAX_SHIELD,
-        hitNotice: undefined,
-        hitNoticeTimer: 0,
+        movingUp: false,
+        movingDown: false,
       };
     } else {
       this.player2 = null;
     }
+
+    this._inputManager.isTwoPlayer = this.twoPlayerMode;
+    this._inputManager.reset();
   }
 
   public startNewGame() {
@@ -540,19 +594,33 @@ export class GameEngine {
     const diff = DIFFICULTY_CONFIGS[this.difficultyLevel];
     const rows = Math.max(1, Math.min(5, 2 + Math.floor(this.wave / 2) + diff.additionalRows));
 
+    // Spawn enemy fleet
+    const cols = 8;
+    const spacingX = 64;
+    const spacingY = 48;
+    const startX = (GAME_WIDTH - cols * spacingX) / 2 + spacingX / 2;
+    const startY = 80;
+
     this.enemies = [];
-    for (let row = 0; row < rows; row++) {
-      for (let col = 0; col < 8; col++) {
-        const type = row === 0 ? EnemyType.ELITE : EnemyType.STANDARD;
-        const x = 100 + col * 75;
-        const y = 40 + row * 45;
-        const hp = type === EnemyType.ELITE ? 3 : 1;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        let type = EnemyType.STANDARD;
+        if (r === 0 && this.wave >= 2) {
+          type = EnemyType.ELITE;
+        } else if (r === 1 && this.wave >= 3) {
+          type = EnemyType.DIVING;
+        } else if (r === 2 && this.wave >= 4) {
+          type = EnemyType.SWARM;
+        }
+
+        const config = ENEMY_CONFIGS[type];
+        const hp = config?.hp ?? 1;
         this.enemies.push({
-          x,
-          y,
-          startX: x,
-          startY: y,
-          angle: Math.random() * Math.PI * 2,
+          x: startX + c * spacingX,
+          y: startY + r * spacingY,
+          startX: startX + c * spacingX,
+          startY: startY + r * spacingY,
+          angle: 0,
           type,
           diving: false,
           hp,
@@ -823,12 +891,27 @@ export class GameEngine {
 
     const diff = DIFFICULTY_CONFIGS[this.difficultyLevel];
 
-    // Player 1 movement
-    if (this.player1.movingLeft) {
-      this.player1.x = Math.max(10, this.player1.x - PLAYER_SPEED);
-    }
-    if (this.player1.movingRight) {
-      this.player1.x = Math.min(GAME_WIDTH - this.player1.width - 10, this.player1.x + PLAYER_SPEED);
+    // Player 1 movement (horizontal & vertical flight via unified InputManager OOP Controller)
+    const p1Left = this._inputManager.isP1MovingLeft();
+    const p1Right = this._inputManager.isP1MovingRight();
+    const p1Up = this._inputManager.isP1MovingUp();
+    const p1Down = this._inputManager.isP1MovingDown();
+
+    this.player1.movingLeft = p1Left;
+    this.player1.movingRight = p1Right;
+    this.player1.movingUp = p1Up;
+    this.player1.movingDown = p1Down;
+
+    let p1Dx = 0;
+    let p1Dy = 0;
+    if (p1Left) p1Dx -= PLAYER_SPEED;
+    if (p1Right) p1Dx += PLAYER_SPEED;
+    if (p1Up) p1Dy -= PLAYER_SPEED;
+    if (p1Down) p1Dy += PLAYER_SPEED;
+
+    if (p1Dx !== 0 || p1Dy !== 0) {
+      this.player1.x = Math.max(10, Math.min(GAME_WIDTH - this.player1.width - 10, this.player1.x + p1Dx));
+      this.player1.y = Math.max(260, Math.min(GAME_HEIGHT - this.player1.height - 10, this.player1.y + p1Dy));
     }
 
     // Passive weapon energy regeneration (+0.08 per frame up to 100)
@@ -854,7 +937,8 @@ export class GameEngine {
     // Player 1 firing
     if (this.fireCooldown > 0) this.fireCooldown--;
 
-    if (this.spaceHeld && this.player1.lives > 0) {
+    const isP1Firing = this._inputManager.isP1Firing() || this.spaceHeld;
+    if (isP1Firing && this.player1.lives > 0) {
       if (this.player1.weaponMode === WeaponMode.LASER_BEAM) {
         this.firePlayer1();
       } else if (this.fireCooldown === 0) {
@@ -866,12 +950,28 @@ export class GameEngine {
 
     // Player 2 movement & fire
     if (this.twoPlayerMode && this.player2 && this.player2.lives > 0) {
-      if (this.player2.movingLeft) {
-        this.player2.x = Math.max(10, this.player2.x - PLAYER_SPEED);
+      const p2Left = this._inputManager.isP2MovingLeft();
+      const p2Right = this._inputManager.isP2MovingRight();
+      const p2Up = this._inputManager.isP2MovingUp();
+      const p2Down = this._inputManager.isP2MovingDown();
+
+      this.player2.movingLeft = p2Left;
+      this.player2.movingRight = p2Right;
+      this.player2.movingUp = p2Up;
+      this.player2.movingDown = p2Down;
+
+      let p2Dx = 0;
+      let p2Dy = 0;
+      if (p2Left) p2Dx -= PLAYER_SPEED;
+      if (p2Right) p2Dx += PLAYER_SPEED;
+      if (p2Up) p2Dy -= PLAYER_SPEED;
+      if (p2Down) p2Dy += PLAYER_SPEED;
+
+      if (p2Dx !== 0 || p2Dy !== 0) {
+        this.player2.x = Math.max(10, Math.min(GAME_WIDTH - this.player2.width - 10, this.player2.x + p2Dx));
+        this.player2.y = Math.max(260, Math.min(GAME_HEIGHT - this.player2.height - 10, this.player2.y + p2Dy));
       }
-      if (this.player2.movingRight) {
-        this.player2.x = Math.min(GAME_WIDTH - this.player2.width - 10, this.player2.x + PLAYER_SPEED);
-      }
+
       if (this.player2.damageFlash && this.player2.damageFlash > 0) {
         this.player2.damageFlash = Math.max(0, this.player2.damageFlash - 0.04);
       }
@@ -886,7 +986,8 @@ export class GameEngine {
         if (this.player2.hitNoticeTimer === 0) this.player2.hitNotice = undefined;
       }
       if (this.secondPlayerFireCooldown > 0) this.secondPlayerFireCooldown--;
-      if (this.secondPlayerFireHeld && this.secondPlayerFireCooldown === 0) {
+      const isP2Firing = this._inputManager.isP2Firing() || this.secondPlayerFireHeld;
+      if (isP2Firing && this.secondPlayerFireCooldown === 0) {
         this.firePlayer2();
       }
     }

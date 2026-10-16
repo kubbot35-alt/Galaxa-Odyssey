@@ -1152,9 +1152,11 @@ export class SpaceCombat3DScene {
   // Player at bottom y: 530 -> 3D Z: 0.0 (near camera)
   // Enemies at top y: 40 -> 3D Z: 24.0 (downrange)
   private map2Dto3D(x: number, y: number): THREE.Vector3 {
-    const threeX = ((x - GAME_WIDTH / 2) / (GAME_WIDTH / 2)) * 12.0;
+    const validX = Number.isFinite(x) ? x : GAME_WIDTH / 2;
+    const validY = Number.isFinite(y) ? y : GAME_HEIGHT / 2;
+    const threeX = ((validX - GAME_WIDTH / 2) / (GAME_WIDTH / 2)) * 12.0;
     // Map y: 0 -> Z: 24.0, y: 600 -> Z: -2.0
-    const threeZ = 24.0 - (y / GAME_HEIGHT) * 26.0;
+    const threeZ = 24.0 - (validY / GAME_HEIGHT) * 26.0;
     return new THREE.Vector3(threeX, 0, threeZ);
   }
 
@@ -1701,9 +1703,17 @@ export class SpaceCombat3DScene {
       return { targets: [], primaryTarget: null };
     }
 
-    const p1Pos = this.playerShipGroup
-      ? this.playerShipGroup.position
-      : this.map2Dto3D(engine.player1.x + engine.player1.width / 2, engine.player1.y);
+    const p1X = engine?.player1 ? (Number.isFinite(engine.player1.x) ? engine.player1.x : GAME_WIDTH / 2) : GAME_WIDTH / 2;
+    const p1Width = engine?.player1 ? (Number.isFinite(engine.player1.width) ? engine.player1.width : 40) : 40;
+    const p1Y = engine?.player1 ? (Number.isFinite(engine.player1.y) ? engine.player1.y : 530) : 530;
+
+    const fallbackP1Pos = this.map2Dto3D(p1X + p1Width / 2, p1Y);
+    const p1Pos =
+      this.playerShipGroup &&
+      Number.isFinite(this.playerShipGroup.position.x) &&
+      Number.isFinite(this.playerShipGroup.position.z)
+        ? this.playerShipGroup.position
+        : fallbackP1Pos;
 
     const canvasWidth = this.container.clientWidth || 1000;
     const canvasHeight = this.container.clientHeight || 640;
@@ -1713,11 +1723,18 @@ export class SpaceCombat3DScene {
 
     for (let i = 0; i < engine.enemies.length; i++) {
       const enemy = engine.enemies[i];
-      const pos = this.map2Dto3D(enemy.x + 16, enemy.y + 16);
+      if (!enemy) continue;
+
+      const enemyX = Number.isFinite(enemy.x) ? enemy.x : (enemy.startX ?? GAME_WIDTH / 2);
+      const enemyY = Number.isFinite(enemy.y) ? enemy.y : (enemy.startY ?? 100);
+
+      const pos = this.map2Dto3D(enemyX + 16, enemyY + 16);
 
       const dx = pos.x - p1Pos.x;
       const dz = pos.z - p1Pos.z;
-      const distUnits = Math.hypot(dx, dz);
+      const safeDx = Number.isFinite(dx) ? dx : 0;
+      const safeDz = Number.isFinite(dz) ? dz : 0;
+      const distUnits = Math.hypot(safeDx, safeDz);
       const distMeters = Math.round(distUnits * 32 + 120);
 
       // Closing velocity in m/s (negative means closing in)
@@ -1728,19 +1745,23 @@ export class SpaceCombat3DScene {
       v.y = 0.3; // enemy hull center
       v.project(this.camera);
 
-      const inFront = v.z < 1.0;
-      const screenX = ((v.x + 1) / 2) * canvasWidth;
-      const screenY = ((-v.y + 1) / 2) * canvasHeight;
-      const screenPercentX = ((v.x + 1) / 2) * 100;
-      const screenPercentY = ((-v.y + 1) / 2) * 100;
-      const inView = inFront && v.x >= -1.15 && v.x <= 1.15 && v.y >= -1.15 && v.y <= 1.15;
+      const inFront = Number.isFinite(v.z) && v.z < 1.0;
+      const safeVx = Number.isFinite(v.x) ? v.x : 0;
+      const safeVy = Number.isFinite(v.y) ? v.y : 0;
+      const screenX = ((safeVx + 1) / 2) * canvasWidth;
+      const screenY = ((-safeVy + 1) / 2) * canvasHeight;
+      const screenPercentX = ((safeVx + 1) / 2) * 100;
+      const screenPercentY = ((-safeVy + 1) / 2) * 100;
+      const inView = inFront && safeVx >= -1.15 && safeVx <= 1.15 && safeVy >= -1.15 && safeVy <= 1.15;
 
       // Normalized radar relative coordinates (-1..1 horizontal, 0..1 downrange)
-      const radarX = THREE.MathUtils.clamp(dx / 12, -1, 1);
-      const radarZ = THREE.MathUtils.clamp(dz / 26, 0, 1);
+      const radarX = THREE.MathUtils.clamp(safeDx / 12, -1, 1);
+      const radarZ = THREE.MathUtils.clamp(safeDz / 26, 0, 1);
+
+      const safeEnemyStartX = Number.isFinite(enemy.startX) ? Math.round(enemy.startX) : i;
 
       const projected: ProjectedTarget = {
-        id: `tgt-${enemy.type}-${Math.round(enemy.startX)}-${i}`,
+        id: `tgt-${enemy.type}-${safeEnemyStartX}-${i}`,
         type: enemy.type,
         screenX,
         screenY,
@@ -1750,10 +1771,10 @@ export class SpaceCombat3DScene {
         distanceUnits: distUnits,
         distanceMeters: distMeters,
         relativeVelocity: relativeVel,
-        radarX,
-        radarZ,
-        hp: enemy.hp,
-        maxHp: enemy.maxHp,
+        radarX: Number.isFinite(radarX) ? radarX : 0,
+        radarZ: Number.isFinite(radarZ) ? radarZ : 0.5,
+        hp: Number.isFinite(enemy.hp) ? enemy.hp : 1,
+        maxHp: Number.isFinite(enemy.maxHp) ? enemy.maxHp : 1,
         isDiving: !!enemy.diving,
         enemyRef: enemy,
       };
@@ -1761,7 +1782,7 @@ export class SpaceCombat3DScene {
       targets.push(projected);
 
       // Boresight lock scoring: prioritize targets closest to forward firing axis
-      let score = Math.abs(dx) * 2.2 + distUnits * 0.8;
+      let score = Math.abs(safeDx) * 2.2 + distUnits * 0.8;
       if (enemy.diving) score -= 8.0; // Urgent diving threat
       if (enemy.type === EnemyType.ELITE) score -= 3.0;
 

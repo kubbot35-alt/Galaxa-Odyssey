@@ -32,6 +32,8 @@ import {
   Palette,
   RotateCw,
   Film,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 
 interface Modern3DMenuProps {
@@ -39,6 +41,8 @@ interface Modern3DMenuProps {
   onLaunch: () => void;
   onStateUpdate: () => void;
   onSwitchToRetro?: () => void;
+  isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
 }
 
 type MenuTab = 'main' | 'deploy' | 'loadout' | 'diagnostics' | 'manual';
@@ -48,6 +52,8 @@ export const Modern3DMenu: React.FC<Modern3DMenuProps> = ({
   onLaunch,
   onStateUpdate,
   onSwitchToRetro,
+  isFullscreen = false,
+  onToggleFullscreen,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<SpaceHangarScene | null>(null);
@@ -60,6 +66,7 @@ export const Modern3DMenu: React.FC<Modern3DMenuProps> = ({
   });
   const [isWarping, setIsWarping] = useState<boolean>(false);
   const [activeCameraPreset, setActiveCameraPreset] = useState<string>('default');
+  const [isCinematicView, setIsCinematicView] = useState<boolean>(false);
 
   // Cinematic Intro Fly-Through State
   const [isIntroPlaying, setIsIntroPlaying] = useState<boolean>(() => {
@@ -95,6 +102,7 @@ export const Modern3DMenu: React.FC<Modern3DMenuProps> = ({
         setIsIntroPlaying(false);
         setIntroTelemetry((prev) => ({ ...prev, active: false }));
         soundEngine.stopCinematicIntroSoundscape();
+        soundEngine.startHangarAmbience();
         try {
           sessionStorage.setItem('galaxa_intro_seen', 'true');
         } catch {}
@@ -102,6 +110,7 @@ export const Modern3DMenu: React.FC<Modern3DMenuProps> = ({
       soundEngine.playCinematicIntroSoundscape();
     } else {
       setIntroTelemetry((prev) => ({ ...prev, active: false }));
+      soundEngine.startHangarAmbience();
     }
 
     const interval = setInterval(() => {
@@ -114,17 +123,40 @@ export const Modern3DMenu: React.FC<Modern3DMenuProps> = ({
       }
     }, 45);
 
+    const ro = new ResizeObserver(() => {
+      window.dispatchEvent(new Event('resize'));
+    });
+    ro.observe(containerRef.current);
+
     return () => {
+      ro.disconnect();
       clearInterval(interval);
       soundEngine.stopCinematicIntroSoundscape();
+      soundEngine.stopHangarAmbience();
       scene.dispose();
       sceneRef.current = null;
     };
   }, []);
 
+  // Keyboard shortcut listener: 'C' toggles clean 3D hangar cinematic mode
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if ((e.key === 'c' || e.key === 'C') && document.activeElement?.tagName !== 'INPUT' && !isIntroPlaying) {
+        setIsCinematicView((prev) => !prev);
+        soundEngine.playUiClick();
+      }
+      if (e.key === 'Escape' && isCinematicView) {
+        setIsCinematicView(false);
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [isCinematicView, isIntroPlaying]);
+
   const handleSkipIntro = () => {
     soundEngine.playUiClick();
     soundEngine.stopCinematicIntroSoundscape();
+    soundEngine.startHangarAmbience();
     setIsIntroPlaying(false);
     setIntroTelemetry((prev) => ({ ...prev, active: false }));
     try {
@@ -141,6 +173,7 @@ export const Modern3DMenu: React.FC<Modern3DMenuProps> = ({
 
   const handleReplayIntro = () => {
     soundEngine.playUiClick();
+    soundEngine.stopHangarAmbience();
     setIsIntroPlaying(true);
     setActiveTab('main');
     if (sceneRef.current) {
@@ -152,6 +185,7 @@ export const Modern3DMenu: React.FC<Modern3DMenuProps> = ({
         setIsIntroPlaying(false);
         setIntroTelemetry((prev) => ({ ...prev, active: false }));
         soundEngine.stopCinematicIntroSoundscape();
+        soundEngine.startHangarAmbience();
       });
       soundEngine.playCinematicIntroSoundscape();
     }
@@ -210,6 +244,7 @@ export const Modern3DMenu: React.FC<Modern3DMenuProps> = ({
       setIntroTelemetry((prev) => ({ ...prev, active: false }));
       if (sceneRef.current) sceneRef.current.skipCinematicIntro();
     }
+    soundEngine.stopHangarAmbience();
     soundEngine.playWarpJump();
     setIsWarping(true);
     engine.difficultyLevel = selectedDifficulty;
@@ -218,11 +253,13 @@ export const Modern3DMenu: React.FC<Modern3DMenuProps> = ({
     if (sceneRef.current) {
       sceneRef.current.triggerHyperdriveLaunch(() => {
         soundEngine.stopMenuMusic();
+        soundEngine.stopHangarAmbience();
         engine.startNewGame();
         onLaunch();
       });
     } else {
       soundEngine.stopMenuMusic();
+      soundEngine.stopHangarAmbience();
       engine.startNewGame();
       onLaunch();
     }
@@ -235,17 +272,20 @@ export const Modern3DMenu: React.FC<Modern3DMenuProps> = ({
       setIntroTelemetry((prev) => ({ ...prev, active: false }));
       if (sceneRef.current) sceneRef.current.skipCinematicIntro();
     }
+    soundEngine.stopHangarAmbience();
     soundEngine.playWarpJump();
     setIsWarping(true);
 
     if (sceneRef.current) {
       sceneRef.current.triggerHyperdriveLaunch(() => {
         soundEngine.stopMenuMusic();
+        soundEngine.stopHangarAmbience();
         engine.loadSavedGame();
         onLaunch();
       });
     } else {
       soundEngine.stopMenuMusic();
+      soundEngine.stopHangarAmbience();
       engine.loadSavedGame();
       onLaunch();
     }
@@ -297,7 +337,7 @@ export const Modern3DMenu: React.FC<Modern3DMenuProps> = ({
   const hasSave = engine.hasSavedGame();
 
   return (
-    <div className="relative w-full max-w-[900px] aspect-[4/3] bg-slate-950 rounded-2xl overflow-hidden shadow-[0_0_60px_rgba(2,132,199,0.3)] border border-cyan-500/40 select-none">
+    <div className="relative w-full h-full min-h-0 flex-1 bg-slate-950 overflow-hidden select-none">
       {/* 1. Three.js 3D WebGL Canvas Layer */}
       <div
         ref={containerRef}
@@ -365,8 +405,27 @@ export const Modern3DMenu: React.FC<Modern3DMenuProps> = ({
               <span>INTRO</span>
             </button>
 
+            {/* Toggle Clean 3D Hangar View */}
+            <button
+              type="button"
+              onClick={() => {
+                soundEngine.playUiClick();
+                setIsCinematicView((prev) => !prev);
+              }}
+              title="Przełącz tryb czystego widoku 3D hangaru [C]"
+              className={`px-2 py-0.5 rounded text-[10px] font-mono transition flex items-center gap-1 font-bold ${
+                isCinematicView
+                  ? 'bg-cyan-500 text-black shadow-[0_0_10px_rgba(6,182,212,0.6)]'
+                  : 'bg-cyan-950/70 text-cyan-300 border border-cyan-500/50 hover:bg-cyan-900/80 hover:text-white shadow-[0_0_8px_rgba(6,182,212,0.25)]'
+              }`}
+            >
+              <Eye size={11} className={isCinematicView ? 'text-black' : 'text-cyan-400'} />
+              <span>HANGAR 3D [C]</span>
+            </button>
+
             {[
               { id: 'default', label: '3/4 Hero' },
+              { id: 'hangar', label: 'Hangar Bay' },
               { id: 'cockpit', label: 'Cockpit' },
               { id: 'weapons', label: 'Weapons' },
               { id: 'engines', label: 'Engines' },
@@ -421,7 +480,8 @@ export const Modern3DMenu: React.FC<Modern3DMenuProps> = ({
         </div>
 
         {/* Center / Left: Interactive 21st-Century Menu Views */}
-        <div className="w-full max-w-[440px] pointer-events-auto my-auto">
+        {!isCinematicView && (
+          <div className="w-full max-w-[440px] pointer-events-auto my-auto">
           {activeTab === 'main' && (
             <div className="space-y-2.5 animate-in fade-in slide-in-from-left-4 duration-300">
               {/* Brand Title */}
@@ -1016,8 +1076,67 @@ export const Modern3DMenu: React.FC<Modern3DMenuProps> = ({
             </div>
           )}
         </div>
+      )}
 
-        {/* Bottom Telemetry Bar */}
+      {/* 3. Floating Cinematic Hangar Navigation Bar (when in Cinematic Mode) */}
+      {isCinematicView && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-auto flex flex-wrap items-center justify-center gap-2 bg-slate-950/90 backdrop-blur-xl border border-cyan-500/50 rounded-2xl px-4 py-2.5 shadow-[0_0_25px_rgba(6,182,212,0.3)] animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="text-xs font-mono text-cyan-300 font-bold flex items-center gap-2 mr-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>TRYB KINOWY HANGARU</span>
+            <span className="text-slate-400 text-[10px] hidden sm:inline">(Przeciągnij myszą 360°, Scroll = Zoom)</span>
+          </div>
+
+          <div className="flex items-center gap-1">
+            {[
+              { id: 'hangar', label: 'Hangar Bay' },
+              { id: 'default', label: 'Statek 3/4' },
+              { id: 'cockpit', label: 'Kokpit' },
+              { id: 'weapons', label: 'Działa' },
+              { id: 'engines', label: 'Silniki' },
+              { id: 'orbital', label: 'Orbita' },
+            ].map((cam) => (
+              <button
+                key={cam.id}
+                type="button"
+                onClick={() => handleCameraChange(cam.id)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-mono transition ${
+                  activeCameraPreset === cam.id
+                    ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-500/60 font-bold shadow-[0_0_8px_rgba(6,182,212,0.4)]'
+                    : 'text-slate-400 hover:text-white bg-slate-900/60 border border-slate-800'
+                }`}
+              >
+                {cam.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="h-4 w-px bg-slate-800 mx-1 hidden sm:block" />
+
+          <button
+            type="button"
+            onClick={() => {
+              soundEngine.playUiClick();
+              setIsCinematicView(false);
+            }}
+            className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-mono font-bold transition flex items-center gap-1.5 cursor-pointer border border-slate-700"
+          >
+            <span>POWRÓT DO MENU [C]</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleStartMission}
+            className="px-4 py-1 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-black rounded-lg text-xs font-mono transition shadow-[0_0_12px_rgba(6,182,212,0.5)] flex items-center gap-1.5 cursor-pointer"
+          >
+            <Rocket size={13} />
+            <span>START MISJI</span>
+          </button>
+        </div>
+      )}
+
+      {/* Bottom Telemetry Bar */}
+      {!isCinematicView && (
         <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 pointer-events-auto bg-slate-950/85 backdrop-blur-md border border-slate-800/80 rounded-xl px-3 sm:px-4 py-2">
           <div className="flex items-center gap-3">
             <span className="text-cyan-400 font-bold">RADAR:</span>
@@ -1029,6 +1148,7 @@ export const Modern3DMenu: React.FC<Modern3DMenuProps> = ({
             <span>SCROLL TO ZOOM</span>
           </div>
         </div>
+      )}
       </div>
     </div>
   );

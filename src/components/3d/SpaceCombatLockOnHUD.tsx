@@ -92,7 +92,9 @@ export const SpaceCombatLockOnHUD: React.FC<SpaceCombatLockOnHUDProps> = ({
   // Lead Aim Offset calculation for projectile deflection
   const leadOffset = primaryTarget
     ? {
-        x: (primaryTarget.enemyRef.x - primaryTarget.enemyRef.startX) * 0.45,
+        x: Number.isFinite(primaryTarget.enemyRef?.x) && Number.isFinite(primaryTarget.enemyRef?.startX)
+          ? (primaryTarget.enemyRef.x - primaryTarget.enemyRef.startX) * 0.45
+          : 0,
         y: primaryTarget.isDiving ? 28 : -14,
       }
     : { x: 0, y: 0 };

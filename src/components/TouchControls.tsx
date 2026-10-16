@@ -15,22 +15,29 @@ export const TouchControls: React.FC<TouchControlsProps> = ({ engine, onStateUpd
 
   return (
     <div className="w-full max-w-[900px] mt-2 px-2 sm:px-3 py-2 flex flex-wrap items-center justify-between gap-2 select-none">
-      {/* Player 1 Left / Right steering */}
-      <div className="flex items-center gap-2">
+      {/* Player 1 4-Way Flight Steering */}
+      <div className="flex items-center gap-1.5 sm:gap-2">
         <button
           type="button"
           onTouchStart={(e) => {
             e.preventDefault();
-            engine.player1.movingLeft = true;
+            engine.inputManager.p1Left = true;
           }}
           onTouchEnd={(e) => {
             e.preventDefault();
-            engine.player1.movingLeft = false;
+            engine.inputManager.p1Left = false;
           }}
-          onMouseDown={() => (engine.player1.movingLeft = true)}
-          onMouseUp={() => (engine.player1.movingLeft = false)}
-          onMouseLeave={() => (engine.player1.movingLeft = false)}
-          className="w-13 h-13 sm:w-14 sm:h-14 bg-cyan-950/70 border-2 border-cyan-400/60 rounded-xl active:bg-cyan-600/40 text-cyan-300 font-bold text-xl flex items-center justify-center shadow-lg active:scale-95 transition-transform"
+          onMouseDown={() => {
+            engine.inputManager.p1Left = true;
+          }}
+          onMouseUp={() => {
+            engine.inputManager.p1Left = false;
+          }}
+          onMouseLeave={() => {
+            engine.inputManager.p1Left = false;
+          }}
+          className="w-12 h-12 sm:w-13 sm:h-13 bg-cyan-950/80 border-2 border-cyan-400/60 rounded-xl active:bg-cyan-600/40 text-cyan-300 font-bold text-lg flex items-center justify-center shadow-lg active:scale-95 transition-transform"
+          title="Lewo [A / ←]"
         >
           ◀
         </button>
@@ -38,18 +45,73 @@ export const TouchControls: React.FC<TouchControlsProps> = ({ engine, onStateUpd
           type="button"
           onTouchStart={(e) => {
             e.preventDefault();
-            engine.player1.movingRight = true;
+            engine.inputManager.p1Right = true;
           }}
           onTouchEnd={(e) => {
             e.preventDefault();
-            engine.player1.movingRight = false;
+            engine.inputManager.p1Right = false;
           }}
-          onMouseDown={() => (engine.player1.movingRight = true)}
-          onMouseUp={() => (engine.player1.movingRight = false)}
-          onMouseLeave={() => (engine.player1.movingRight = false)}
-          className="w-13 h-13 sm:w-14 sm:h-14 bg-cyan-950/70 border-2 border-cyan-400/60 rounded-xl active:bg-cyan-600/40 text-cyan-300 font-bold text-xl flex items-center justify-center shadow-lg active:scale-95 transition-transform"
+          onMouseDown={() => {
+            engine.inputManager.p1Right = true;
+          }}
+          onMouseUp={() => {
+            engine.inputManager.p1Right = false;
+          }}
+          onMouseLeave={() => {
+            engine.inputManager.p1Right = false;
+          }}
+          className="w-12 h-12 sm:w-13 sm:h-13 bg-cyan-950/80 border-2 border-cyan-400/60 rounded-xl active:bg-cyan-600/40 text-cyan-300 font-bold text-lg flex items-center justify-center shadow-lg active:scale-95 transition-transform"
+          title="Prawo [D / →]"
         >
           ▶
+        </button>
+        <button
+          type="button"
+          onTouchStart={(e) => {
+            e.preventDefault();
+            engine.inputManager.p1Up = true;
+          }}
+          onTouchEnd={(e) => {
+            e.preventDefault();
+            engine.inputManager.p1Up = false;
+          }}
+          onMouseDown={() => {
+            engine.inputManager.p1Up = true;
+          }}
+          onMouseUp={() => {
+            engine.inputManager.p1Up = false;
+          }}
+          onMouseLeave={() => {
+            engine.inputManager.p1Up = false;
+          }}
+          className="w-12 h-12 sm:w-13 sm:h-13 bg-cyan-950/80 border-2 border-cyan-400/60 rounded-xl active:bg-cyan-600/40 text-cyan-300 font-bold text-lg flex items-center justify-center shadow-lg active:scale-95 transition-transform"
+          title="Do przodu [W / ↑]"
+        >
+          ▲
+        </button>
+        <button
+          type="button"
+          onTouchStart={(e) => {
+            e.preventDefault();
+            engine.inputManager.p1Down = true;
+          }}
+          onTouchEnd={(e) => {
+            e.preventDefault();
+            engine.inputManager.p1Down = false;
+          }}
+          onMouseDown={() => {
+            engine.inputManager.p1Down = true;
+          }}
+          onMouseUp={() => {
+            engine.inputManager.p1Down = false;
+          }}
+          onMouseLeave={() => {
+            engine.inputManager.p1Down = false;
+          }}
+          className="w-12 h-12 sm:w-13 sm:h-13 bg-cyan-950/80 border-2 border-cyan-400/60 rounded-xl active:bg-cyan-600/40 text-cyan-300 font-bold text-lg flex items-center justify-center shadow-lg active:scale-95 transition-transform"
+          title="Do tyłu [S / ↓]"
+        >
+          ▼
         </button>
       </div>
 
@@ -105,23 +167,28 @@ export const TouchControls: React.FC<TouchControlsProps> = ({ engine, onStateUpd
           onTouchStart={(e) => {
             e.preventDefault();
             engine.spaceHeld = true;
+            engine.inputManager.p1Fire = true;
             if (engine.fireCooldown === 0) engine.firePlayer1();
           }}
           onTouchEnd={(e) => {
             e.preventDefault();
             engine.spaceHeld = false;
+            engine.inputManager.p1Fire = false;
             engine.player1.isLaserActive = false;
           }}
           onMouseDown={() => {
             engine.spaceHeld = true;
+            engine.inputManager.p1Fire = true;
             if (engine.fireCooldown === 0) engine.firePlayer1();
           }}
           onMouseUp={() => {
             engine.spaceHeld = false;
+            engine.inputManager.p1Fire = false;
             engine.player1.isLaserActive = false;
           }}
           onMouseLeave={() => {
             engine.spaceHeld = false;
+            engine.inputManager.p1Fire = false;
             engine.player1.isLaserActive = false;
           }}
           className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-tr from-cyan-600/80 to-blue-500/80 border-2 border-cyan-300 rounded-2xl active:scale-95 text-white font-black text-sm flex items-center justify-center shadow-[0_0_15px_rgba(55,245,255,0.4)] transition-transform"

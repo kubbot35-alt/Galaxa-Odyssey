@@ -24,14 +24,19 @@ import {
   Flame,
   Radio,
   Radar,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import { ShipSkinId } from './3d/SpaceHangarScene';
+import { CockpitHUDOverlay } from './3d/CockpitHUDOverlay';
 
 interface Modern3DGameCanvasProps {
   engine: GameEngine;
   onStateUpdate: () => void;
   selectedSkin?: ShipSkinId;
   onReturnToHangar?: () => void;
+  isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
 }
 
 export const Modern3DGameCanvas: React.FC<Modern3DGameCanvasProps> = ({
@@ -39,6 +44,8 @@ export const Modern3DGameCanvas: React.FC<Modern3DGameCanvasProps> = ({
   onStateUpdate,
   selectedSkin = 'titanium',
   onReturnToHangar,
+  isFullscreen = false,
+  onToggleFullscreen,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<SpaceCombat3DScene | null>(null);
@@ -58,7 +65,13 @@ export const Modern3DGameCanvas: React.FC<Modern3DGameCanvasProps> = ({
     const scene = new SpaceCombat3DScene(containerRef.current, selectedSkin);
     sceneRef.current = scene;
 
+    const ro = new ResizeObserver(() => {
+      window.dispatchEvent(new Event('resize'));
+    });
+    ro.observe(containerRef.current);
+
     return () => {
+      ro.disconnect();
       scene.dispose();
       sceneRef.current = null;
     };
@@ -126,6 +139,8 @@ export const Modern3DGameCanvas: React.FC<Modern3DGameCanvasProps> = ({
         } else if (e.key === 'r' || e.key === 'R') {
           soundEngine.playUiClick();
           setShowRadar((prev) => !prev);
+        } else if ((e.key === 'f' || e.key === 'F') && !engine.twoPlayerMode) {
+          if (onToggleFullscreen) onToggleFullscreen();
         }
       }
 
@@ -244,17 +259,32 @@ export const Modern3DGameCanvas: React.FC<Modern3DGameCanvasProps> = ({
 
   return (
     <div
-      className={`relative w-full max-w-[1000px] h-[640px] rounded-2xl overflow-hidden border transition-all duration-150 bg-slate-950 select-none ${
+      className={`relative w-full h-full min-h-0 flex-1 overflow-hidden transition-all duration-150 bg-slate-950 select-none ${
         isTakingDamage
           ? 'border-red-500/80 shadow-[0_0_60px_rgba(239,68,68,0.45)]'
-          : 'border-cyan-500/30 shadow-[0_0_50px_rgba(6,182,212,0.15)]'
+          : 'border-cyan-500/30'
       }`}
     >
       {/* 3D WebGL Three.js Container */}
       <div ref={containerRef} className="absolute inset-0 w-full h-full cursor-crosshair" />
 
+      {/* 3D First-Person Cockpit View HUD Overlay */}
+      {viewMode === 'COCKPIT_3D' && engine.gameState === GameState.PLAYING && (
+        <CockpitHUDOverlay
+          shield={p1.shield}
+          maxShield={MAX_SHIELD}
+          energy={p1.weaponEnergy}
+          maxEnergy={MAX_WEAPON_ENERGY}
+          lives={p1.lives}
+          weaponMode={p1.weaponMode}
+          bankAngle={p1.movingLeft ? -0.35 : p1.movingRight ? 0.35 : 0}
+          isTakingDamage={isTakingDamage}
+          onToggleView={toggleViewMode}
+        />
+      )}
+
       {/* 3D-Space Target Distance & Locking Systems HUD Overlay */}
-      {engine.gameState === GameState.PLAYING && (
+      {engine.gameState === GameState.PLAYING && viewMode !== 'COCKPIT_3D' && (
         <SpaceCombatLockOnHUD
           targets={targetTelemetry.targets}
           primaryTarget={targetTelemetry.primaryTarget}
@@ -459,7 +489,33 @@ export const Modern3DGameCanvas: React.FC<Modern3DGameCanvasProps> = ({
               <span className="text-slate-600 hidden sm:inline">•</span>
               <span className="hidden sm:inline">[1-4] Broń</span>
               <span className="text-slate-600 hidden sm:inline">•</span>
-              <span className="hidden sm:inline">[V] Widok</span>
+              <button
+                type="button"
+                onClick={toggleViewMode}
+                className={`flex items-center gap-1 font-bold px-1.5 py-0.5 rounded transition ${
+                  viewMode === 'COCKPIT_3D'
+                    ? 'bg-amber-950 text-amber-300 border border-amber-500/40 shadow-[0_0_8px_rgba(245,158,11,0.3)]'
+                    : 'text-slate-400 hover:text-white bg-slate-800/60'
+                }`}
+                title="Przełącz Perspektywę (Klawisz V)"
+              >
+                <Camera size={11} />
+                <span>{viewMode === 'COCKPIT_3D' ? 'KOKPIT' : 'TPP'} [V]</span>
+              </button>
+              {onToggleFullscreen && (
+                <>
+                  <span className="text-slate-600 hidden sm:inline">•</span>
+                  <button
+                    type="button"
+                    onClick={onToggleFullscreen}
+                    className="flex items-center gap-1 font-bold px-1.5 py-0.5 rounded text-slate-400 hover:text-white bg-slate-800/60 hover:bg-slate-700 transition"
+                    title="Przełącz Pełny Ekran [F]"
+                  >
+                    {isFullscreen ? <Minimize2 size={11} /> : <Maximize2 size={11} />}
+                    <span className="hidden md:inline">{isFullscreen ? 'OKNO' : 'PEŁNY EKRAN'} [F]</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
 

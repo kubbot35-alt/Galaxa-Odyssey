@@ -59,17 +59,28 @@ export const DIFFICULTY_CONFIGS: Record<DifficultyLevel, DifficultyConfig> = {
 export enum EnemyType {
   STANDARD = 'STANDARD',
   ELITE = 'ELITE',
+  BOSS = 'BOSS',
+  ESCORT = 'ESCORT',
+  DIVING = 'DIVING',
+  SWARM = 'SWARM',
 }
 
 export interface EnemyConfig {
   score: number;
   credits: number;
   difficulty: number;
+  width?: number;
+  height?: number;
+  hp?: number;
 }
 
 export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
-  [EnemyType.STANDARD]: { score: 100, credits: 5, difficulty: 1 },
-  [EnemyType.ELITE]: { score: 250, credits: 15, difficulty: 2 },
+  [EnemyType.STANDARD]: { score: 100, credits: 5, difficulty: 1, width: 38, height: 32, hp: 1 },
+  [EnemyType.ELITE]: { score: 250, credits: 15, difficulty: 2, width: 44, height: 36, hp: 3 },
+  [EnemyType.BOSS]: { score: 1500, credits: 100, difficulty: 5, width: 72, height: 56, hp: 35 },
+  [EnemyType.ESCORT]: { score: 200, credits: 10, difficulty: 2, width: 36, height: 32, hp: 2 },
+  [EnemyType.DIVING]: { score: 150, credits: 8, difficulty: 1.5, width: 38, height: 32, hp: 1 },
+  [EnemyType.SWARM]: { score: 80, credits: 3, difficulty: 1, width: 28, height: 26, hp: 1 },
 };
 
 export enum WeaponMode {
@@ -86,6 +97,23 @@ export interface WeaponModeConfig {
   color: string;
   glow: string;
   cooldown: number;
+  fireRate: number;
+  energyCost: number;
+  sound: SoundType;
+}
+
+export enum SoundType {
+  SHOOT = 'SHOOT',
+  P2_SHOOT = 'P2_SHOOT',
+  EXPLOSION = 'EXPLOSION',
+  POWER_UP = 'POWER_UP',
+  POWERUP = 'POWER_UP',
+  LASER = 'LASER',
+  TRIPLE_SHOT = 'TRIPLE_SHOT',
+  TOKEN_COLLECT = 'TOKEN_COLLECT',
+  CLICK = 'CLICK',
+  HIT = 'HIT',
+  DAMAGE = 'DAMAGE',
 }
 
 export const WEAPON_MODE_CONFIGS: Record<WeaponMode, WeaponModeConfig> = {
@@ -96,6 +124,9 @@ export const WEAPON_MODE_CONFIGS: Record<WeaponMode, WeaponModeConfig> = {
     color: '#37f5ff',
     glow: 'rgba(55, 245, 255, 0.4)',
     cooldown: 8,
+    fireRate: 8,
+    energyCost: 0,
+    sound: SoundType.SHOOT,
   },
   [WeaponMode.TRIPLE_SHOT]: {
     name: 'Triple Fan Shot',
@@ -104,6 +135,9 @@ export const WEAPON_MODE_CONFIGS: Record<WeaponMode, WeaponModeConfig> = {
     color: '#fbbf24',
     glow: 'rgba(251, 191, 36, 0.4)',
     cooldown: 9,
+    fireRate: 9,
+    energyCost: 1.5,
+    sound: SoundType.TRIPLE_SHOT,
   },
   [WeaponMode.LASER_BEAM]: {
     name: 'Hyper Laser Beam',
@@ -112,6 +146,9 @@ export const WEAPON_MODE_CONFIGS: Record<WeaponMode, WeaponModeConfig> = {
     color: '#ff37a6',
     glow: 'rgba(255, 55, 166, 0.5)',
     cooldown: 3,
+    fireRate: 3,
+    energyCost: 0.8,
+    sound: SoundType.LASER,
   },
   [WeaponMode.PLASMA_SPREAD]: {
     name: 'Plasma Spread',
@@ -120,6 +157,9 @@ export const WEAPON_MODE_CONFIGS: Record<WeaponMode, WeaponModeConfig> = {
     color: '#a855f7',
     glow: 'rgba(168, 85, 247, 0.4)',
     cooldown: 11,
+    fireRate: 11,
+    energyCost: 2.5,
+    sound: SoundType.TRIPLE_SHOT,
   },
 };
 
@@ -130,6 +170,13 @@ export enum PowerUpType {
   TOKEN_LASER_BEAM = 'TOKEN_LASER_BEAM',
   TOKEN_PLASMA_SPREAD = 'TOKEN_PLASMA_SPREAD',
   WEAPON = 'WEAPON',
+  // Aliases for gameplay and factory
+  UPGRADE = 'WEAPON',
+  SHIELD = 'SHIELD_BOOST',
+  LIFE = 'EXTRA_LIFE',
+  SPEED = 'SPEED',
+  NUKE = 'NUKE',
+  TIME_WARP = 'TIME_WARP',
 }
 
 export enum UpgradeOption {
@@ -140,7 +187,14 @@ export enum UpgradeOption {
   RETURN = 'RETURN',
 }
 
-export const UPGRADE_CONFIGS = [
+export interface UpgradeConfig {
+  id: UpgradeOption;
+  name: string;
+  subtitle: string;
+  cost: number;
+}
+
+export const UPGRADE_CONFIGS: UpgradeConfig[] = [
   { id: UpgradeOption.DUAL_CANNONS, name: 'DUAL CANNONS', subtitle: 'Fire two projectiles simultaneously', cost: 120 },
   { id: UpgradeOption.TRIPLE_CANNONS, name: 'TRIPLE CANNONS', subtitle: 'Fire three spread projectiles', cost: 260 },
   { id: UpgradeOption.DOUBLE_LIVES, name: 'DOUBLE LIVES', subtitle: 'Start missions with double lives (6 lives)', cost: 5000 },
@@ -152,15 +206,6 @@ export enum SettingsOption {
   AUDIO = 'AUDIO',
   PARTICLES = 'PARTICLES',
   RETURN = 'RETURN',
-}
-
-export enum SoundType {
-  SHOOT = 'SHOOT',
-  EXPLOSION = 'EXPLOSION',
-  POWER_UP = 'POWER_UP',
-  LASER = 'LASER',
-  TRIPLE_SHOT = 'TRIPLE_SHOT',
-  TOKEN_COLLECT = 'TOKEN_COLLECT',
 }
 
 export interface GameSaveData {

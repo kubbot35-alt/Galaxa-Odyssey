@@ -14,16 +14,22 @@ interface CinematicTelemetry {
 interface SpaceCinematicIntroOverlayProps {
   telemetry: CinematicTelemetry;
   onSkip: () => void;
+  onLaunchImmediate?: () => void;
 }
 
 export const SpaceCinematicIntroOverlay: React.FC<SpaceCinematicIntroOverlayProps> = ({
   telemetry,
   onSkip,
+  onLaunchImmediate,
 }) => {
-  // Listen for Space and Escape keys to skip the intro fly-through
+  // Listen for Space and Escape keys to skip, and Enter to start directly
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space' || e.key === 'Escape' || e.key === 'Enter') {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (onLaunchImmediate) onLaunchImmediate();
+        else onSkip();
+      } else if (e.code === 'Space' || e.key === 'Escape') {
         e.preventDefault();
         onSkip();
       }
@@ -143,18 +149,32 @@ export const SpaceCinematicIntroOverlay: React.FC<SpaceCinematicIntroOverlayProp
         </div>
 
         {/* Skip Intro & Start Button */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {onLaunchImmediate && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onLaunchImmediate();
+              }}
+              className="flex items-center gap-2 px-3 sm:px-5 py-2 rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 hover:from-cyan-300 hover:to-blue-400 text-slate-950 transition-all shadow-[0_0_25px_rgba(6,182,212,0.8)] text-xs font-mono font-black group cursor-pointer animate-pulse"
+            >
+              <span>ROZPOCZNIJ MISJĘ</span>
+              <span className="text-[10px] bg-slate-950/20 px-1.5 py-0.5 rounded text-slate-950 font-bold">[ENTER]</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               onSkip();
             }}
-            className="flex items-center gap-2 px-3 sm:px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition-all shadow-[0_0_20px_rgba(6,182,212,0.6)] text-xs font-mono font-black group cursor-pointer animate-pulse"
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700 transition-all text-xs font-mono font-bold group cursor-pointer"
           >
-            <span>POMIŃ INTRO / WEJDŹ DO GRY</span>
-            <SkipForward size={16} className="group-hover:translate-x-0.5 transition-transform" />
-            <span className="hidden sm:inline text-[10px] bg-slate-950/20 px-1.5 py-0.5 rounded text-slate-950 font-bold">[SPACJA]</span>
+            <span>POMIŃ DO MENU</span>
+            <SkipForward size={14} className="group-hover:translate-x-0.5 transition-transform" />
+            <span className="hidden sm:inline text-[10px] bg-slate-800 px-1 py-0.5 rounded text-slate-400">[SPACJA]</span>
           </button>
         </div>
       </div>

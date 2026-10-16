@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { Spaceship3D } from './Spaceship3D';
+import { CloneWarsHangar3D } from '../../game/hangar/CloneWarsHangar3D';
+import { HangarFactory } from '../../game/factories/GameEntityFactory';
 
 export interface CameraTargetPreset {
   position: THREE.Vector3;
@@ -75,28 +77,32 @@ export const SHIP_SKINS: Record<ShipSkinId, ShipSkinConfig> = {
 
 export const CAMERA_PRESETS: Record<string, CameraTargetPreset> = {
   default: {
-    position: new THREE.Vector3(0, 1.6, 6.2),
-    lookAt: new THREE.Vector3(0, 0, 0),
+    position: new THREE.Vector3(0, 2.3, 6.2),
+    lookAt: new THREE.Vector3(0, 1.1, 0),
   },
   weapons: {
-    position: new THREE.Vector3(2.6, 0.9, 3.4),
-    lookAt: new THREE.Vector3(0.8, -0.1, 0.4),
+    position: new THREE.Vector3(2.6, 1.9, 3.4),
+    lookAt: new THREE.Vector3(0.8, 1.0, 0.4),
   },
   cockpit: {
-    position: new THREE.Vector3(-1.2, 1.8, 3.0),
-    lookAt: new THREE.Vector3(0, 0.35, 0.8),
+    position: new THREE.Vector3(-1.2, 2.6, 3.0),
+    lookAt: new THREE.Vector3(0, 1.35, 0.8),
   },
   engines: {
-    position: new THREE.Vector3(-2.6, 1.4, -4.2),
-    lookAt: new THREE.Vector3(0, 0.2, -1.0),
+    position: new THREE.Vector3(-2.6, 2.2, -4.2),
+    lookAt: new THREE.Vector3(0, 1.2, -1.0),
   },
   cinematic: {
-    position: new THREE.Vector3(3.8, 2.5, 4.8),
-    lookAt: new THREE.Vector3(0, 0.1, 0),
+    position: new THREE.Vector3(5.2, 4.2, 7.8),
+    lookAt: new THREE.Vector3(0, 1.4, 0),
   },
   orbital: {
-    position: new THREE.Vector3(0, 5.0, 9.5),
-    lookAt: new THREE.Vector3(0, -0.5, -2.0),
+    position: new THREE.Vector3(0, 9.5, 17.0),
+    lookAt: new THREE.Vector3(0, 2.0, -1.0),
+  },
+  hangar: {
+    position: new THREE.Vector3(0, 7.5, 14.8),
+    lookAt: new THREE.Vector3(0, 3.2, 0),
   },
 };
 
@@ -117,6 +123,7 @@ export class SpaceHangarScene {
   public laserTurretMesh: THREE.Mesh | null = null;
   public cannonMeshes: THREE.Mesh[] = [];
   public spaceship3D!: Spaceship3D;
+  public hangar3D!: CloneWarsHangar3D;
 
   // Material references for live skin switching
   private hullMaterials: THREE.MeshStandardMaterial[] = [];
@@ -165,24 +172,24 @@ export class SpaceHangarScene {
       new THREE.Vector3(-3.2, 0.9, -2.2),  // Low swoop right beside the roaring ion engine thrusters and port wing
       new THREE.Vector3(1.6, 1.3, 1.8),    // Sweeping diagonally across forward fuselage and laser turret
       new THREE.Vector3(3.6, 2.2, 4.2),    // Hero high-quarter look at cockpit canopy glass and front nose
-      new THREE.Vector3(1.4, 1.8, 5.8),    // Centering alignment
-      new THREE.Vector3(0.0, 1.6, 6.2),    // Seamlessly arrives at CAMERA_PRESETS.default.position
+      new THREE.Vector3(1.4, 2.3, 5.8),    // Centering alignment
+      new THREE.Vector3(0.0, 2.3, 6.2),    // Seamlessly arrives at CAMERA_PRESETS.default.position
     ], false, 'catmullrom', 0.5);
 
     this.cameraLookAtSpline = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(0.0, 1.5, -5.0),  // Looking down the long hangar axis
-      new THREE.Vector3(-0.6, 1.0, -2.0), // Looking at the starfighter from above
-      new THREE.Vector3(0.0, 0.6, 0.0),   // Looking toward the ship center
-      new THREE.Vector3(0.8, 0.4, 0.5),   // Looking across the glowing engines and weapons
-      new THREE.Vector3(0.0, 0.4, 1.0),   // Looking directly at the pilot's cockpit canopy
-      new THREE.Vector3(-0.2, 0.2, 0.6),  // Panning across forward hull
-      new THREE.Vector3(0.0, 0.1, 0.2),   // Focusing on ship center
-      new THREE.Vector3(0.0, 0.0, 0.0),   // Seamlessly arrives at CAMERA_PRESETS.default.lookAt
+      new THREE.Vector3(0.0, 2.0, -5.0),  // Looking down the long hangar axis
+      new THREE.Vector3(-0.6, 1.8, -2.0), // Looking at the starfighter from above
+      new THREE.Vector3(0.0, 1.3, 0.0),   // Looking toward the ship center
+      new THREE.Vector3(0.8, 1.2, 0.5),   // Looking across the glowing engines and weapons
+      new THREE.Vector3(0.0, 1.2, 1.0),   // Looking directly at the pilot's cockpit canopy
+      new THREE.Vector3(-0.2, 1.1, 0.6),  // Panning across forward hull
+      new THREE.Vector3(0.0, 1.1, 0.2),   // Focusing on ship center
+      new THREE.Vector3(0.0, 1.1, 0.0),   // Seamlessly arrives at CAMERA_PRESETS.default.lookAt
     ], false, 'catmullrom', 0.5);
 
-    // 1. Scene setup
+    // 1. Scene setup with cinematic atmospheric haze
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.FogExp2(0x030712, 0.04);
+    this.scene.fog = new THREE.FogExp2(0x0a101d, 0.009);
 
     // 2. Camera setup
     this.camera = new THREE.PerspectiveCamera(48, width / height, 0.1, 1000);
@@ -198,7 +205,9 @@ export class SpaceHangarScene {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.2;
+    this.renderer.toneMappingExposure = 1.35;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(this.renderer.domElement);
 
     // 4. Mandatory Studio Environment Reflection (RoomEnvironment) per Three.js directives
@@ -206,7 +215,7 @@ export class SpaceHangarScene {
     this.scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
     pmremGenerator.dispose();
 
-    // 5. Studio Lighting Rig (Key, Rim, Underside fill, Cockpit)
+    // 5. Studio Lighting Rig (Key, Rim, Underside fill)
     this.setupLighting();
 
     // 6. Deep Cosmic Vista (Stars & Nebula Particles)
@@ -226,19 +235,29 @@ export class SpaceHangarScene {
     this.ringMesh = this.createDockRing();
     this.scene.add(this.ringMesh);
 
-    // 10. Holographic Levitation Flight Platform
-    const flightDeck = this.createHolographicFlightDeck();
-    this.scene.add(flightDeck);
-
-    // 10b. Full Architectural Hangar Bay Environment (Arches, Gantries, Catwalks, Runway Lighting)
-    this.hangarGroup = this.createHangarBay();
+    // 10. Monumental Clone Wars Battle Hangar
+    this.hangar3D = HangarFactory.createCloneWarsHangar();
+    this.hangarGroup = this.hangar3D.getMesh();
     this.scene.add(this.hangarGroup);
 
-    // 11. 3D Spaceship
+    // 11. 3D Spaceship with Shadows
     this.spaceship3D = new Spaceship3D();
     this.shipGroup = this.spaceship3D.mesh;
+    this.shipGroup.position.set(0, 1.18, 0);
     this.engineLights = this.spaceship3D.engineLights;
     this.enginePlumes = this.spaceship3D.engineFlames;
+    this.shipGroup.traverse((obj) => {
+      if (obj instanceof THREE.Mesh) {
+        obj.castShadow = true;
+        obj.receiveShadow = true;
+      }
+    });
+
+    // Steady cockpit canopy soft glow attached directly to ship (no clipping or flickering)
+    const canopyLight = new THREE.PointLight(0x38bdf8, 1.2, 8);
+    canopyLight.position.set(0, 1.2, 0.6);
+    this.shipGroup.add(canopyLight);
+
     this.scene.add(this.shipGroup);
 
     // Apply default skin matching concept art
@@ -253,28 +272,33 @@ export class SpaceHangarScene {
 
   private setupLighting() {
     // Ambient soft cosmic fill
-    const ambientLight = new THREE.AmbientLight(0x0f172a, 1.4);
+    const ambientLight = new THREE.AmbientLight(0x0f172a, 1.8);
     this.scene.add(ambientLight);
 
-    // Main Sunlight Key Light
-    const sunLight = new THREE.DirectionalLight(0xe0f2fe, 3.8);
-    sunLight.position.set(14, 20, 16);
-    this.scene.add(sunLight);
+    // Warm Theatrical Key Light with PCF Soft Shadows
+    const keyLight = new THREE.DirectionalLight(0xffedd5, 3.2);
+    keyLight.position.set(12, 18, 12);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.width = 2048;
+    keyLight.shadow.mapSize.height = 2048;
+    keyLight.shadow.bias = -0.0004;
+    keyLight.shadow.camera.near = 0.5;
+    keyLight.shadow.camera.far = 45;
+    keyLight.shadow.camera.left = -20;
+    keyLight.shadow.camera.right = 20;
+    keyLight.shadow.camera.top = 20;
+    keyLight.shadow.camera.bottom = -20;
+    this.scene.add(keyLight);
 
-    // Cyan Aerospace Rim Light
-    const cyanRim = new THREE.DirectionalLight(0x38bdf8, 3.2);
-    cyanRim.position.set(-16, 9, -12);
+    // Cyan Aerospace Rim Light (Stable, no flicker)
+    const cyanRim = new THREE.DirectionalLight(0x38bdf8, 2.6);
+    cyanRim.position.set(-14, 10, -10);
     this.scene.add(cyanRim);
 
-    // Underside Neon Bounce Light
-    const bounceLight = new THREE.PointLight(0xa855f7, 3.2, 28);
-    bounceLight.position.set(3, -3.5, 2);
+    // Underside Neon Bounce Light for landing pad
+    const bounceLight = new THREE.PointLight(0x0ea5e9, 3.6, 18);
+    bounceLight.position.set(0, 0.4, 0);
     this.scene.add(bounceLight);
-
-    // Cockpit Top Highlight
-    const cockpitLight = new THREE.PointLight(0x38bdf8, 2.2, 10);
-    cockpitLight.position.set(0, 2.4, 1.0);
-    this.scene.add(cockpitLight);
   }
 
   private createStarfield(): THREE.Points {
@@ -921,6 +945,7 @@ export class SpaceHangarScene {
     this.warpTime = 0;
     this.onWarpCompleteCallback = onComplete;
     this.warpLinesGroup.visible = true;
+    this.hangar3D?.setGateOpen(true);
 
     // Immediately snap camera to DIRECTLY BEHIND THE SHIP (3D Chase view!)
     this.camera.position.set(
@@ -1096,13 +1121,13 @@ export class SpaceHangarScene {
       const roll = Math.sin(p * Math.PI) * 0.032;
       this.camera.rotation.z += roll;
 
-      // Starfighter idle & engine warmup glow during fly-through
-      const warmupPulse = 1.0 + Math.sin(time * 20) * 0.18;
+      // Starfighter idle & engine warmup glow during fly-through (Stable, no flicker)
+      const warmupPulse = 1.0 + Math.sin(time * 1.5) * 0.02;
       for (const plume of this.enginePlumes) {
-        plume.scale.set(warmupPulse, 1.2 * warmupPulse, warmupPulse);
+        plume.scale.set(warmupPulse, 1.0, warmupPulse);
       }
       for (const light of this.engineLights) {
-        light.intensity = 3.2 + Math.sin(time * 22) * 1.0;
+        light.intensity = 3.2;
       }
 
       // Planetary & Cosmic Rotation
@@ -1131,10 +1156,14 @@ export class SpaceHangarScene {
       }
     } else {
       // Gentle Starfighter Idle Levitation
+      if (this.hangar3D) {
+        this.hangar3D.update(delta, !this.isDragging && !this.isWarping && !this.isCinematicIntro);
+      }
       if (this.spaceship3D) {
         this.spaceship3D.update(delta, true);
       }
-      const hoverY = Math.sin(time * 1.8) * 0.08;
+      const BASE_HOVER_Y = 1.18;
+      const hoverY = BASE_HOVER_Y + Math.sin(time * 1.8) * 0.07;
       const hoverRoll = Math.sin(time * 1.3) * 0.03;
       const hoverPitch = Math.cos(time * 1.5) * 0.02;
 
@@ -1145,13 +1174,13 @@ export class SpaceHangarScene {
         this.shipGroup.rotation.y = this.mouseX * 0.22;
       }
 
-      // Thruster Afterburner Pulse
-      const pulse = 1.0 + Math.sin(time * 16) * 0.12;
+      // Thruster Afterburner Pulse (Stable, calm idle glow - NO FLICKER)
+      const pulse = 1.0 + Math.sin(time * 1.5) * 0.02;
       for (const plume of this.enginePlumes) {
-        plume.scale.set(pulse, 0.95 + pulse * 0.25, pulse);
+        plume.scale.set(pulse, 0.98 + pulse * 0.04, pulse);
       }
       for (const light of this.engineLights) {
-        light.intensity = 3.2 + Math.sin(time * 22) * 0.8;
+        light.intensity = 3.2;
       }
 
       // Background Planetary & Cosmic Rotation
@@ -1184,6 +1213,7 @@ export class SpaceHangarScene {
       cancelAnimationFrame(this.animFrameId);
     }
     window.removeEventListener('resize', this.onResize);
+    this.hangar3D?.dispose();
 
     this.scene.traverse((obj) => {
       if (obj instanceof THREE.Mesh) {

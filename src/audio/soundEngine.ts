@@ -29,10 +29,17 @@ class SoundEngine {
     return this.ctx;
   }
 
+  // Hangar Procedural Ambient Layer
+  private hangarAmbienceRunning = false;
+  private hangarMasterGain: GainNode | null = null;
+  private hangarNodes: (AudioNode | OscillatorNode | AudioBufferSourceNode)[] = [];
+  private hangarTimeoutIds: number[] = [];
+
   public setSoundEnabled(enabled: boolean) {
     this.soundEnabled = enabled;
     if (!enabled) {
       this.stopMenuMusic();
+      this.stopHangarAmbience();
     }
   }
 
@@ -513,6 +520,227 @@ class SoundEngine {
       this.introOscillators = [];
       this.introGainNode = null;
     }
+  }
+
+  /**
+   * Procedural Hangar Ambient Layer:
+   * - Deep mechanical reactor hums & ventilation breathing
+   * - Periodic cryo steam vent decompression hisses
+   * - Distant echoing footsteps and metallic gantry resonance
+   */
+  public startHangarAmbience() {
+    if (!this.soundEnabled || this.hangarAmbienceRunning) return;
+    const ctx = this.initCtx();
+    if (!ctx) return;
+
+    try {
+      this.hangarAmbienceRunning = true;
+      const now = ctx.currentTime;
+
+      const masterGain = ctx.createGain();
+      masterGain.gain.setValueAtTime(0.001, now);
+      masterGain.gain.linearRampToValueAtTime(0.38, now + 1.2);
+      masterGain.connect(ctx.destination);
+      this.hangarMasterGain = masterGain;
+
+      // 1. Deep Mechanical Drone & Low-Frequency Station Generator Resonance (48 Hz + 72 Hz)
+      const subOsc = ctx.createOscillator();
+      subOsc.type = 'sine';
+      subOsc.frequency.setValueAtTime(48.0, now);
+
+      const subGain = ctx.createGain();
+      subGain.gain.setValueAtTime(0.24, now);
+      subOsc.connect(subGain);
+      subGain.connect(masterGain);
+      subOsc.start(now);
+      this.hangarNodes.push(subOsc);
+
+      // Industrial machinery overtone (72 Hz triangle)
+      const machOsc = ctx.createOscillator();
+      machOsc.type = 'triangle';
+      machOsc.frequency.setValueAtTime(72.0, now);
+      machOsc.detune.setValueAtTime(5, now);
+
+      // Low-pass filter to give heavy cavernous acoustics
+      const lpf = ctx.createBiquadFilter();
+      lpf.type = 'lowpass';
+      lpf.frequency.setValueAtTime(160, now);
+      lpf.Q.setValueAtTime(2.2, now);
+
+      // Slow ventilation breathing LFO (0.12 Hz)
+      const lfo = ctx.createOscillator();
+      lfo.frequency.setValueAtTime(0.12, now);
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.setValueAtTime(55, now);
+      lfo.connect(lfoGain);
+      lfoGain.connect(lpf.frequency);
+      lfo.start(now);
+      this.hangarNodes.push(lfo);
+
+      const machGain = ctx.createGain();
+      machGain.gain.setValueAtTime(0.18, now);
+
+      machOsc.connect(lpf);
+      lpf.connect(machGain);
+      machGain.connect(masterGain);
+      machOsc.start(now);
+      this.hangarNodes.push(machOsc);
+
+      // 2. Procedural Atmospheric Steam Vent Routine
+      const scheduleNextSteamVent = () => {
+        if (!this.hangarAmbienceRunning || !this.ctx || !this.hangarMasterGain) return;
+        const delay = 6000 + Math.random() * 8000; // 6 to 14 seconds
+        const tid = window.setTimeout(() => {
+          this.triggerProceduralSteamVent();
+          scheduleNextSteamVent();
+        }, delay);
+        this.hangarTimeoutIds.push(tid);
+      };
+      scheduleNextSteamVent();
+
+      // 3. Procedural Echoing Footsteps & Gantry Pings Routine
+      const scheduleNextFootsteps = () => {
+        if (!this.hangarAmbienceRunning || !this.ctx || !this.hangarMasterGain) return;
+        const delay = 4500 + Math.random() * 7000; // 4.5 to 11.5 seconds
+        const tid = window.setTimeout(() => {
+          this.triggerProceduralEchoingFootstep();
+          scheduleNextFootsteps();
+        }, delay);
+        this.hangarTimeoutIds.push(tid);
+      };
+      scheduleNextFootsteps();
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  private triggerProceduralSteamVent() {
+    if (!this.soundEnabled || !this.hangarAmbienceRunning || !this.ctx || !this.hangarMasterGain) return;
+    try {
+      const ctx = this.ctx;
+      const now = ctx.currentTime;
+      const duration = 1.4 + Math.random() * 0.8;
+
+      const bufferSize = Math.floor(ctx.sampleRate * duration);
+      const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+
+      const noiseSource = ctx.createBufferSource();
+      noiseSource.buffer = noiseBuffer;
+
+      const bandpass = ctx.createBiquadFilter();
+      bandpass.type = 'bandpass';
+      const startFreq = 1600 + Math.random() * 400;
+      const endFreq = 450 + Math.random() * 150;
+      bandpass.frequency.setValueAtTime(startFreq, now);
+      bandpass.frequency.exponentialRampToValueAtTime(endFreq, now + duration);
+      bandpass.Q.setValueAtTime(2.8, now);
+
+      const ventGain = ctx.createGain();
+      ventGain.gain.setValueAtTime(0.001, now);
+      ventGain.gain.linearRampToValueAtTime(0.12, now + 0.12);
+      ventGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+      noiseSource.connect(bandpass);
+      bandpass.connect(ventGain);
+      ventGain.connect(this.hangarMasterGain);
+
+      noiseSource.start(now);
+      noiseSource.stop(now + duration);
+    } catch {}
+  }
+
+  private triggerProceduralEchoingFootstep() {
+    if (!this.soundEnabled || !this.hangarAmbienceRunning || !this.ctx || !this.hangarMasterGain) return;
+    try {
+      const ctx = this.ctx;
+      const now = ctx.currentTime;
+      const isPing = Math.random() > 0.45;
+
+      if (isPing) {
+        // High distant metallic tool clank with cathedral reverb slapback
+        const pingFreq = 840 + Math.random() * 320;
+        const osc = ctx.createOscillator();
+        const pingGain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(pingFreq, now);
+        osc.frequency.exponentialRampToValueAtTime(pingFreq * 0.6, now + 0.18);
+
+        pingGain.gain.setValueAtTime(0.04, now);
+        pingGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+
+        // Slapback echo at +0.16s
+        const echoGain = ctx.createGain();
+        echoGain.gain.setValueAtTime(0.001, now);
+        echoGain.gain.setValueAtTime(0.018, now + 0.16);
+        echoGain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+
+        osc.connect(pingGain);
+        pingGain.connect(this.hangarMasterGain);
+        osc.connect(echoGain);
+        echoGain.connect(this.hangarMasterGain);
+
+        osc.start(now);
+        osc.stop(now + 0.48);
+      } else {
+        // Echoing boots on metal floor (double tap)
+        const stepOffsets = [0, 0.32 + Math.random() * 0.08];
+        stepOffsets.forEach((offset) => {
+          const osc = ctx.createOscillator();
+          const stepGain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(260 + Math.random() * 40, now + offset);
+          osc.frequency.exponentialRampToValueAtTime(90, now + offset + 0.09);
+
+          stepGain.gain.setValueAtTime(0.001, now);
+          stepGain.gain.setValueAtTime(0.06, now + offset);
+          stepGain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.09);
+
+          // Cavernous echo
+          const echoGain = ctx.createGain();
+          echoGain.gain.setValueAtTime(0.001, now);
+          echoGain.gain.setValueAtTime(0.022, now + offset + 0.14);
+          echoGain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.38);
+
+          osc.connect(stepGain);
+          stepGain.connect(this.hangarMasterGain!);
+          osc.connect(echoGain);
+          echoGain.connect(this.hangarMasterGain!);
+
+          osc.start(now + offset);
+          osc.stop(now + offset + 0.4);
+        });
+      }
+    } catch {}
+  }
+
+  public stopHangarAmbience() {
+    if (!this.hangarAmbienceRunning) return;
+    this.hangarAmbienceRunning = false;
+    this.hangarTimeoutIds.forEach((tid) => clearTimeout(tid));
+    this.hangarTimeoutIds = [];
+
+    if (this.hangarMasterGain && this.ctx) {
+      try {
+        const now = this.ctx.currentTime;
+        this.hangarMasterGain.gain.cancelScheduledValues(now);
+        this.hangarMasterGain.gain.setValueAtTime(this.hangarMasterGain.gain.value, now);
+        this.hangarMasterGain.gain.linearRampToValueAtTime(0.001, now + 0.6);
+      } catch {}
+    }
+
+    setTimeout(() => {
+      this.hangarNodes.forEach((node) => {
+        try {
+          if ('stop' in node) (node as OscillatorNode).stop();
+        } catch {}
+      });
+      this.hangarNodes = [];
+      this.hangarMasterGain = null;
+    }, 650);
   }
 }
 

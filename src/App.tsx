@@ -13,6 +13,7 @@ import {
   VolumeX,
   Sparkles,
   Maximize2,
+  Minimize2,
   RotateCcw,
   Trophy,
 } from 'lucide-react';
@@ -43,6 +44,19 @@ export const App: React.FC = () => {
     return () => document.removeEventListener('fullscreenchange', handleFsChange);
   }, []);
 
+  // Global 'F' key listener for full screen toggle
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if ((e.key === 'f' || e.key === 'F') && !engine.twoPlayerMode && !e.repeat) {
+        if (document.activeElement?.tagName !== 'INPUT') {
+          toggleFullscreen();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [engine.twoPlayerMode]);
+
   const isMenuState = [
     GameState.MENU,
     GameState.PLAYER_MODE_SELECTION,
@@ -55,9 +69,10 @@ export const App: React.FC = () => {
   const selectedSkin = (typeof window !== 'undefined' && localStorage.getItem('galaxa_ship_skin') as ShipSkinId) || 'titanium';
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-between p-2 sm:p-4 selection:bg-cyan-500 selection:text-black">
-      {/* Top Bar Header */}
-      <header className="w-full max-w-[1000px] flex items-center justify-between py-2 px-3 bg-slate-900/60 backdrop-blur border border-slate-800 rounded-xl mb-2">
+    <div className="h-screen w-screen overflow-hidden bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-cyan-500 selection:text-black">
+      {/* Top Bar Header (Hidden in Fullscreen for 100% pure 3D gaming immersion) */}
+      {!isFullscreen && (
+        <header className="w-full shrink-0 flex items-center justify-between py-1.5 px-3 sm:px-5 bg-slate-900/80 backdrop-blur border-b border-slate-800 z-30">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-purple-600 flex items-center justify-center font-black text-sm shadow-[0_0_10px_rgba(55,245,255,0.4)]">
             GO
@@ -71,7 +86,6 @@ export const App: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-
           {/* Achievement Badges Trigger */}
           <button
             type="button"
@@ -128,10 +142,12 @@ export const App: React.FC = () => {
           <button
             type="button"
             onClick={toggleFullscreen}
-            title="Toggle Fullscreen"
-            className="p-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700 transition"
+            title={isFullscreen ? 'Opuść Pełny Ekran [F]' : 'Pełny Ekran [F]'}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700 hover:border-cyan-400 transition text-xs font-mono font-bold"
           >
-            <Maximize2 size={16} />
+            {isFullscreen ? <Minimize2 size={14} className="text-cyan-400" /> : <Maximize2 size={14} className="text-cyan-400" />}
+            <span className="hidden sm:inline">{isFullscreen ? 'OKNO' : 'PEŁNY EKRAN'}</span>
+            <span className="text-[10px] text-slate-400 hidden md:inline">[F]</span>
           </button>
 
           {/* Reset Save Data */}
@@ -156,14 +172,17 @@ export const App: React.FC = () => {
           </button>
         </div>
       </header>
+      )}
 
-      {/* Main Game / Menu Area */}
-      <main className="relative w-full flex flex-col items-center justify-center flex-1 my-auto">
+      {/* Main Game / Menu Area - Full Screen Fill */}
+      <main className="relative w-full flex-1 min-h-0 overflow-hidden flex flex-col items-center justify-center">
         {isMenuState ? (
           <Modern3DMenu
             engine={engine}
             onLaunch={forceUpdate}
             onStateUpdate={forceUpdate}
+            isFullscreen={isFullscreen}
+            onToggleFullscreen={toggleFullscreen}
           />
         ) : (
           <>
@@ -171,6 +190,8 @@ export const App: React.FC = () => {
               engine={engine}
               onStateUpdate={forceUpdate}
               selectedSkin={selectedSkin}
+              isFullscreen={isFullscreen}
+              onToggleFullscreen={toggleFullscreen}
               onReturnToHangar={() => {
                 engine.returnToMenu();
                 forceUpdate();
@@ -201,24 +222,24 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      {/* Footer Navigation Info */}
-      <footer className="w-full max-w-[1000px] mt-2 py-2 px-3 text-center text-[11px] text-slate-400 bg-slate-900/40 rounded-lg border border-slate-800/80 flex flex-wrap items-center justify-between gap-2">
+      {/* Footer Navigation Info - Full Screen Slim Bar */}
+      <footer className="w-full shrink-0 py-1.5 px-3 sm:px-5 text-center text-[11px] text-slate-400 bg-slate-900/80 backdrop-blur border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 z-30">
         <div className="flex items-center gap-2">
           <span className="text-cyan-400 font-mono font-semibold">Sterowanie 3D:</span>
           <span>P1: ← / → + Spacja</span>
           <span className="text-slate-600">|</span>
           <span>Broń: 1-4 / Q, E</span>
           <span className="text-slate-600">|</span>
-          <span>Kamera: V</span>
+          <span>Kamera: V (TPP / Kokpit)</span>
           <span className="text-slate-600">|</span>
-          <span>P2: A / D + F</span>
+          <span>Pełny Ekran: F</span>
           <span className="text-slate-600">|</span>
           <span>Odznaki: B</span>
           <span className="text-slate-600">|</span>
           <span>Pauza: ESC</span>
         </div>
-        <div className="text-slate-500 font-mono text-[10px]">
-          Galaxa Odyssey 21st-Century 3D Combat Active • Widok zza statku
+        <div className="text-slate-500 font-mono text-[10px] hidden sm:block">
+          Galaxa Odyssey • Architektura Hangar3D & Pelny Ekran
         </div>
       </footer>
     </div>

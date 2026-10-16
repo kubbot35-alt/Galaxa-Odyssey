@@ -10,17 +10,22 @@ interface SpaceCombatRadarProps {
 }
 
 export const SpaceCombatRadar: React.FC<SpaceCombatRadarProps> = ({
-  targets,
-  primaryTarget,
-  wave,
+  targets = [],
+  primaryTarget = null,
+  wave = 1,
 }) => {
   const radarSize = 160;
   const radius = radarSize / 2;
   const padding = 12;
   const effectiveRadius = radius - padding;
 
+  const safeTargets = Array.isArray(targets) ? targets : [];
+
   // Count diving threats
-  const divingCount = useMemo(() => targets.filter((t) => t.isDiving).length, [targets]);
+  const divingCount = useMemo(
+    () => safeTargets.filter((t) => t && t.isDiving).length,
+    [safeTargets]
+  );
 
   return (
     <div className="relative flex flex-col gap-1 p-2.5 rounded-xl bg-slate-950/85 backdrop-blur-md border border-cyan-500/40 shadow-[0_0_25px_rgba(6,182,212,0.2)] font-mono text-cyan-300 pointer-events-auto select-none">
@@ -166,32 +171,51 @@ export const SpaceCombatRadar: React.FC<SpaceCombatRadarProps> = ({
           />
 
           {/* Render Incoming Enemy Wave Blips in 3D Space */}
-          {targets.map((tgt) => {
+          {safeTargets.map((tgt, idx) => {
+            if (!tgt) return null;
+
+            // Safely sanitize radar inputs to guarantee valid numbers
+            const rawRadarX = Number.isFinite(tgt.radarX) ? tgt.radarX : 0;
+            const rawRadarZ = Number.isFinite(tgt.radarZ) ? tgt.radarZ : 0.5;
+
             // Map normalized radar coords:
             // radarX: -1 to 1 (left to right)
             // radarZ: 0 (near player) to 1 (far downrange ahead)
-            // On radar display: player is at (radius, radius + 15), targets are ahead (y decreases toward padding)
             const playerCenterY = radius + 10;
-            const px = radius + tgt.radarX * (effectiveRadius * 0.85);
-            // Invert Z so forward enemies are rendered upward on the radar
-            const py = playerCenterY - tgt.radarZ * (effectiveRadius * 1.55);
+            const px = radius + rawRadarX * (effectiveRadius * 0.85);
+            const py = playerCenterY - rawRadarZ * (effectiveRadius * 1.55);
 
             const isPrimary = primaryTarget?.id === tgt.id;
             const isElite = tgt.type === EnemyType.ELITE;
-            const isDiving = tgt.isDiving;
+            const isDiving = !!tgt.isDiving;
 
-            // Clamped coordinates to radar boundary
-            const clampedX = Math.max(padding + 2, Math.min(radarSize - padding - 2, px));
-            const clampedY = Math.max(padding + 2, Math.min(radarSize - padding - 2, py));
+            // Clamped coordinates to radar boundary with strict finite guards
+            let clampedX = Number.isFinite(px)
+              ? Math.max(padding + 2, Math.min(radarSize - padding - 2, px))
+              : radius;
+            let clampedY = Number.isFinite(py)
+              ? Math.max(padding + 2, Math.min(radarSize - padding - 2, py))
+              : radius;
+
+            if (!Number.isFinite(clampedX)) clampedX = radius;
+            if (!Number.isFinite(clampedY)) clampedY = radius;
+
+            const safeKey = tgt.id || `blip-${idx}`;
+            const stemLength = isDiving ? 7 : 4;
+            const clampedY2 = clampedY + stemLength;
+
+            const finalX = Number.isFinite(clampedX) ? clampedX : radius;
+            const finalY = Number.isFinite(clampedY) ? clampedY : radius;
+            const finalY2 = Number.isFinite(clampedY2) ? clampedY2 : finalY + stemLength;
 
             return (
-              <g key={tgt.id}>
+              <g key={safeKey}>
                 {/* 3D Depth Stem / Altitude drop line */}
                 <line
-                  x1={clampedX}
-                  y1={clampedY}
-                  x2={clampedX}
-                  y2={clampedY + (isDiving ? 7 : 4)}
+                  x1={finalX}
+                  y1={finalY}
+                  x2={finalX}
+                  y2={finalY2}
                   stroke={isDiving ? '#ef4444' : isElite ? '#c084fc' : '#f59e0b'}
                   strokeWidth="0.8"
                   opacity="0.45"
@@ -201,8 +225,8 @@ export const SpaceCombatRadar: React.FC<SpaceCombatRadarProps> = ({
                 {/* Primary Lock Bracket on Radar */}
                 {isPrimary && (
                   <circle
-                    cx={clampedX}
-                    cy={clampedY}
+                    cx={finalX}
+                    cy={finalY}
                     r="6.5"
                     fill="none"
                     stroke="#06b6d4"
@@ -217,7 +241,7 @@ export const SpaceCombatRadar: React.FC<SpaceCombatRadarProps> = ({
                 {isDiving ? (
                   // Fast Diving Threat - Red flashing inverted triangle
                   <polygon
-                    points={`${clampedX},${clampedY + 4} ${clampedX - 3.5},${clampedY - 3} ${clampedX + 3.5},${clampedY - 3}`}
+                    points={`${finalX},${finalY + 4} ${finalX - 3.5},${finalY - 3} ${finalX + 3.5},${finalY - 3}`}
                     fill="#ef4444"
                     stroke="#ffffff"
                     strokeWidth="0.8"
@@ -226,7 +250,7 @@ export const SpaceCombatRadar: React.FC<SpaceCombatRadarProps> = ({
                 ) : isElite ? (
                   // Elite Craft - Magenta diamond
                   <polygon
-                    points={`${clampedX},${clampedY - 4} ${clampedX + 4},${clampedY} ${clampedX},${clampedY + 4} ${clampedX - 4},${clampedY}`}
+                    points={`${finalX},${finalY - 4} ${finalX + 4},${finalY} ${finalX},${finalY + 4} ${finalX - 4},${finalY}`}
                     fill="#c084fc"
                     stroke="#f43f5e"
                     strokeWidth="0.8"
@@ -234,8 +258,8 @@ export const SpaceCombatRadar: React.FC<SpaceCombatRadarProps> = ({
                 ) : (
                   // Standard Raider - Amber round blip
                   <circle
-                    cx={clampedX}
-                    cy={clampedY}
+                    cx={finalX}
+                    cy={finalY}
                     r="3"
                     fill="#f59e0b"
                     stroke="#fde68a"
