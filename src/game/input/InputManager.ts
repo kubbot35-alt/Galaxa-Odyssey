@@ -1,198 +1,102 @@
-export class InputManager {
-  // Touch / Virtual button states
-  public p1Left = false;
-  public p1Right = false;
-  public p1Up = false;
-  public p1Down = false;
-  public p1Fire = false;
+import type { GameInputActions, PlayerIntent, PlayerSlot, VirtualButtonAction } from '../../types/input';
+import { IDLE_INPUT, mergeInputs, toIntent } from './PlayerIntent';
+import type { IInputSource, InputCommands, IPlayerIntentProvider } from './IInputSource';
+import { KeyboardInputSource } from './KeyboardInputSource';
+import { VirtualInputSource } from './VirtualInputSource';
 
-  public p2Left = false;
-  public p2Right = false;
-  public p2Up = false;
-  public p2Down = false;
-  public p2Fire = false;
+/** Aggregates input sources into per-player intents and forwards their discrete commands. */
+export class InputManager implements IPlayerIntentProvider {
+    public isTwoPlayer = false;
 
-  public isTwoPlayer = false;
+    private onWeaponCycle?: (dir: 1 | -1) => void;
+    private onWeaponSelect?: (modeIdx: number) => void;
+    private onPauseToggle?: () => void;
+    private onAchievementsToggle?: () => void;
+    private onFireStart?: (pIdx: number) => void;
+    private onFireEnd?: (pIdx: number) => void;
 
-  // Keyboard active states
-  private keys: Record<string, boolean> = {};
+    private readonly virtual = new VirtualInputSource();
+    private readonly sources: IInputSource[];
 
-  // Event callbacks
-  private onWeaponCycle?: (dir: 1 | -1) => void;
-  private onWeaponSelect?: (modeIdx: number) => void;
-  private onPauseToggle?: () => void;
-  private onAchievementsToggle?: () => void;
-  private onFireStart?: (pIdx: number) => void;
-  private onFireEnd?: (pIdx: number) => void;
+    private readonly commands: InputCommands = {
+        weaponCycle: (dir) => this.onWeaponCycle?.(dir),
+        weaponSelect: (modeIdx) => this.onWeaponSelect?.(modeIdx),
+        pauseToggle: () => this.onPauseToggle?.(),
+        achievementsToggle: () => this.onAchievementsToggle?.(),
+        fireStart: (slot) => this.onFireStart?.(slot),
+        fireEnd: (slot) => this.onFireEnd?.(slot),
+    };
 
-  private handleKeyDown = (e: KeyboardEvent) => {
-    this.keys[e.key.toLowerCase()] = true;
-    this.keys[e.code] = true;
-
-    // Weapon cycling
-    if (e.key === 'q' || e.key === 'Q') {
-      this.onWeaponCycle?.(-1);
-    } else if (e.key === 'e' || e.key === 'E') {
-      this.onWeaponCycle?.(1);
+    /** The on-screen button source is always present; `sources` are the physical devices of the platform. */
+    constructor(sources: IInputSource[] = [new KeyboardInputSource()]) {
+        this.sources = [...sources, this.virtual];
+        this.sources.forEach((source) => source.connect(this.commands));
     }
 
-    // Number keys for weapons
-    if (e.key === '1') this.onWeaponSelect?.(0);
-    if (e.key === '2') this.onWeaponSelect?.(1);
-    if (e.key === '3') this.onWeaponSelect?.(2);
-    if (e.key === '4') this.onWeaponSelect?.(3);
-
-    // Pause
-    if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
-      this.onPauseToggle?.();
+    public addSource(source: IInputSource): void {
+        source.connect(this.commands);
+        this.sources.push(source);
     }
 
-    // Achievements
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      this.onAchievementsToggle?.();
+    public setOnWeaponCycle(cb: (dir: 1 | -1) => void) {
+        this.onWeaponCycle = cb;
     }
 
-    // Fire start
-    if (e.code === 'Space') {
-      this.onFireStart?.(1);
+    public setOnWeaponSelect(cb: (modeIdx: number) => void) {
+        this.onWeaponSelect = cb;
     }
-    if (e.code === 'Numpad0' || e.code === 'Enter') {
-      this.onFireStart?.(2);
+
+    public setOnPauseToggle(cb: () => void) {
+        this.onPauseToggle = cb;
     }
-  };
 
-  private handleKeyUp = (e: KeyboardEvent) => {
-    this.keys[e.key.toLowerCase()] = false;
-    this.keys[e.code] = false;
-
-    if (e.code === 'Space') {
-      this.onFireEnd?.(1);
+    public setOnAchievementsToggle(cb: () => void) {
+        this.onAchievementsToggle = cb;
     }
-    if (e.code === 'Numpad0' || e.code === 'Enter') {
-      this.onFireEnd?.(2);
+
+    public setOnFireStart(cb: (pIdx: number) => void) {
+        this.onFireStart = cb;
     }
-  };
 
-  constructor() {
-    if (typeof window !== 'undefined') {
-      window.addEventListener('keydown', this.handleKeyDown);
-      window.addEventListener('keyup', this.handleKeyUp);
+    public setOnFireEnd(cb: (pIdx: number) => void) {
+        this.onFireEnd = cb;
     }
-  }
 
-  public setOnWeaponCycle(cb: (dir: 1 | -1) => void) {
-    this.onWeaponCycle = cb;
-  }
-
-  public setOnWeaponSelect(cb: (modeIdx: number) => void) {
-    this.onWeaponSelect = cb;
-  }
-
-  public setOnPauseToggle(cb: () => void) {
-    this.onPauseToggle = cb;
-  }
-
-  public setOnAchievementsToggle(cb: () => void) {
-    this.onAchievementsToggle = cb;
-  }
-
-  public setOnFireStart(cb: (pIdx: number) => void) {
-    this.onFireStart = cb;
-  }
-
-  public setOnFireEnd(cb: (pIdx: number) => void) {
-    this.onFireEnd = cb;
-  }
-
-  public isP1MovingLeft(): boolean {
-    return (
-      this.p1Left ||
-      this.keys['arrowleft'] ||
-      this.keys['a'] ||
-      this.keys['keya'] ||
-      false
-    );
-  }
-
-  public isP1MovingRight(): boolean {
-    return (
-      this.p1Right ||
-      this.keys['arrowright'] ||
-      this.keys['d'] ||
-      this.keys['keyd'] ||
-      false
-    );
-  }
-
-  public isP1MovingUp(): boolean {
-    return (
-      this.p1Up ||
-      this.keys['arrowup'] ||
-      this.keys['w'] ||
-      this.keys['keyw'] ||
-      false
-    );
-  }
-
-  public isP1MovingDown(): boolean {
-    return (
-      this.p1Down ||
-      this.keys['arrowdown'] ||
-      this.keys['s'] ||
-      this.keys['keys'] ||
-      false
-    );
-  }
-
-  public isP1Firing(): boolean {
-    return this.p1Fire || this.keys['space'] || this.keys[' '] || false;
-  }
-
-  public isP2MovingLeft(): boolean {
-    return this.p2Left || this.keys['numpad4'] || this.keys['j'] || false;
-  }
-
-  public isP2MovingRight(): boolean {
-    return this.p2Right || this.keys['numpad6'] || this.keys['l'] || false;
-  }
-
-  public isP2MovingUp(): boolean {
-    return this.p2Up || this.keys['numpad8'] || this.keys['i'] || false;
-  }
-
-  public isP2MovingDown(): boolean {
-    return this.p2Down || this.keys['numpad5'] || this.keys['numpad2'] || this.keys['k'] || false;
-  }
-
-  public isP2Firing(): boolean {
-    return (
-      this.p2Fire ||
-      this.keys['numpad0'] ||
-      this.keys['enter'] ||
-      this.keys['semicolon'] ||
-      false
-    );
-  }
-
-  public reset() {
-    this.p1Left = false;
-    this.p1Right = false;
-    this.p1Up = false;
-    this.p1Down = false;
-    this.p1Fire = false;
-    this.p2Left = false;
-    this.p2Right = false;
-    this.p2Up = false;
-    this.p2Down = false;
-    this.p2Fire = false;
-    this.keys = {};
-  }
-
-  public dispose() {
-    if (typeof window !== 'undefined') {
-      window.removeEventListener('keydown', this.handleKeyDown);
-      window.removeEventListener('keyup', this.handleKeyUp);
+    public setVirtualButton(player: PlayerSlot, action: VirtualButtonAction, pressed: boolean) {
+        this.virtual.setButton(player, action, pressed);
     }
-  }
+
+    public getIntent(slot: PlayerSlot): PlayerIntent {
+        if (slot === 2 && !this.isTwoPlayer) return toIntent(IDLE_INPUT);
+        return toIntent(mergeInputs(this.sources.map((source) => source.getInput(slot, this.isTwoPlayer))));
+    }
+
+    public getPlayer1Actions(): PlayerIntent {
+        return this.getIntent(1);
+    }
+
+    public getPlayer2Actions(): PlayerIntent {
+        return this.getIntent(2);
+    }
+
+    public getInputActions(): GameInputActions {
+        return {
+            p1: this.getIntent(1),
+            p2: this.getIntent(2),
+            isTwoPlayer: this.isTwoPlayer,
+        };
+    }
+
+    /** Call once per frame so polled devices can raise their discrete commands. */
+    public poll(): void {
+        this.sources.forEach((source) => source.poll?.(this.isTwoPlayer));
+    }
+
+    public reset() {
+        this.sources.forEach((source) => source.reset());
+    }
+
+    public dispose() {
+        this.sources.forEach((source) => source.dispose());
+    }
 }

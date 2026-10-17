@@ -1,53 +1,83 @@
 # Galaxa Odyssey
 
-Futuristic arcade space shooter web game rebuilt with React, TypeScript, Vite, HTML5 Canvas, and Web Audio API.
+Galaxa Odyssey to przeglądarkowa gra arcade o kosmicznej walce. Projekt łączy trójwymiarowy hangar i pole bitwy z walką w kolejnych falach przeciwników. Interfejs obsługuje język polski i angielski.
 
-## Features
+## Funkcje
 
-- **Futuristic Main Menu & Hangar**: Retro space arcade styling with artwork, pilot profile, high scores, credits, and interactive Achievement Badges overlay.
-- **Weapon Power-Up Tokens & Dynamic Weapon Modes**:
-  - **Standard Blaster**: High-velocity forward plasma bolts (Single, Dual, and Triple barrel upgrades).
-  - **🔱 Triple Shot**: 3-way wide-angle fan volleys cutting across incoming alien diving trajectories.
-  - **⚡ Hyper Laser Beam**: Continuous piercing high-energy coherent laser column that melts through lines of enemies and detonates falling bombs instantly.
-  - **🔮 Plasma Spread**: Heavy 5-way destructive arc bolts vaporizing enemy clusters.
-  - **Power-Up Tokens**: Enemies drop glowing cyber tokens (`⚡ LSR`, `🔱 3X`, `🔮 SPR`, `🛡️ SHD`, `❤️ 1UP`, `⭐ +LVL`) that unlock and recharge weapon modes in real time.
-- **HUD Weapon Selector & Energy Gauge**: Switch between unlocked weapon modes using on-screen selector tabs, number keys (`1`, `2`, `3`, `4`), or cycle keys (`Q` / `E`).
-- **Tactical Flight Achievements**: Unlock visual badges (e.g., *First Wave Defeated*, *Laser Overcharge*, *Triple Threat*, *Boss Slayer*, *Bomb Defuser*) with credit rewards displayed in a dedicated Main Menu overlay.
-- **Game Modes**: Solo (1 Player) and Co-op Duel (2 Players) on a shared screen.
-- **Difficulty Selection**: `EASY`, `NORMAL`, and `HARD` mission profiles adjusting enemy aggression, fire rates, formations, and hazards.
-- **Continuous Fire & Weapon Tiers**: Hold `SPACE` (Player 1) or `F` (Player 2) for rapid plasma fire or continuous laser stream.
-- **Lethal Falling Bombs**: Heavy red planetary bombs with warning aura that can be destroyed mid-air.
-- **Retro Web Audio Synthesizer**: Square-wave looping menu melody, laser beam discharge hum, punchy triple volleys, explosion bursts, and token pickup arpeggios.
-- **Visual FX**: Particle spark explosions, dynamic shield aura, laser beam plasma sheath, and scrolling parallax starfield.
-- **Tactical Pause & Persistent Save**: Progress auto-saved to `localStorage` upon pausing or exiting, with instant resume.
+- Hangar 3D ze zmianą widoku kamery, wyborem wyglądu statku i kinową sekwencją startową.
+- Walka z falami przeciwników, bossami, tarczami, radarowym namierzaniem celów i efektami cząsteczkowymi.
+- Tryb dla jednego gracza lub lokalny tryb współpracy dla dwóch graczy.
+- Trzy poziomy trudności oraz cztery tryby uzbrojenia: działo pulsacyjne, potrójny strzał, hiperlaser i rozrzut plazmowy.
+- Osiągnięcia, kredyty i postęp pilota zapisywane lokalnie w przeglądarce.
+- Sterowanie klawiaturą, kontrolerem Gamepad API oraz ekranowymi przyciskami dotykowymi.
+- Ustawienia dźwięku, efektów cząsteczkowych i języka interfejsu.
 
-## Controls
+## Wymagania
 
-### Desktop Keyboard
+- Node.js 20 lub nowszy i npm.
+- Nowoczesna przeglądarka z obsługą WebGL 2, `localStorage` oraz Web Audio API.
+- Kontroler jest opcjonalny i wymaga obsługi Gamepad API w przeglądarce.
+- Nie jest wymagany backend ani konfiguracja zmiennych środowiskowych.
+- Dostęp do internetu jest potrzebny do pobrania fontów Google używanych przez interfejs.
 
-| Key | Action |
+## Uruchomienie
+
+```bash
+npm ci
+npm run dev
+```
+
+Vite wyświetli lokalny adres gry w terminalu.
+
+## Budowanie i testowanie
+
+```bash
+npm run build
+npm test
+npm run preview
+```
+
+`npm run build` sprawdza typy TypeScript i tworzy produkcyjną wersję w katalogu `dist/`. `npm test` uruchamia testy Vitest, a `npm run preview` pozwala lokalnie sprawdzić gotowy build. Opcjonalne `npm run sounds` uruchamia generator dźwięków.
+
+## Sterowanie
+
+| Akcja | Sterowanie |
 |---|---|
-| `←` / `→` | Move Player 1 Ship |
-| `SPACE` | Fire Active Weapon (hold for continuous firing / laser stream) |
-| `1`, `2`, `3`, `4` | Select Weapon Mode (Blaster, Triple Shot, Laser Beam, Plasma Spread) |
-| `Q` / `E` | Cycle previous / next unlocked weapon mode |
-| `A` / `D` | Move Player 2 Ship (Co-op Mode) |
-| `F` | Fire Player 2 Weapons (Co-op Mode) |
-| `B` | Open Achievement Badges & Commendations overlay |
-| `ESC` | Pause game / Resume / Return |
-| `↑` / `↓` | Navigate Menu selections |
-| `ENTER` | Confirm selection / Save & Return |
+| Ruch gracza 1 | Strzałki |
+| Strzał gracza 1 | `Spacja` |
+| Ruch gracza 2 w trybie współpracy | `W` / `A` / `S` / `D` |
+| Strzał gracza 2 | `F` |
+| Wybór trybu uzbrojenia | `1`–`4` |
+| Poprzednia / następna broń | `Q` / `E` |
+| Zmiana kamery | `V` |
+| Pełny ekran | `F` |
+| Osiągnięcia | `B` |
+| Pauza / wznowienie | `Esc` |
 
-*Mouse and touch clicking are also supported across all menus, weapon selector tabs, and gameplay.*
+Menu obsługuje mysz. Na ekranach dotykowych dostępne są wirtualne przyciski. Można również podłączyć kontroler obsługiwany przez Gamepad API.
 
-### Mobile & Touch
+## Języki
 
-On-screen virtual arcade touch buttons for steering, firing, weapon mode selection, and tactical pause.
+Domyślnym językiem gry jest polski (`pl-PL`). Angielski (`en-US`) można włączyć w menu **Diagnostics**, wybierając **ENGLISH** w ustawieniach języka. Wybór jest zapisywany w pamięci lokalnej przeglądarki i zachowywany przy kolejnych uruchomieniach.
 
-## Tech Stack
+Tłumaczenia znajdują się w `src/config/content/locales/`: `pl-PL.ts` definiuje domyślny słownik i typowany schemat, a `en-US.ts` dostarcza angielskie teksty zgodne z tym schematem. Dodając lub zmieniając tekst interfejsu, należy aktualizować oba słowniki, aby zachować kompletność tłumaczeń. Język dokumentacji i kodu może być inny niż język interfejsu.
 
-- **Runtime**: Node.js 22
-- **Framework**: React 18 + TypeScript + Vite
-- **Styling**: Tailwind CSS
-- **Audio**: Web Audio API (realtime synthesizer)
-- **Rendering**: HTML5 Canvas (60 FPS)
+## Technologie
+
+- React 19 i TypeScript
+- Vite
+- Three.js do renderowania scen 3D
+- Tailwind CSS
+- Web Audio API
+- Vitest
+
+## Zapisane dane
+
+Ustawienia, wybrany język, osiągnięcia i postęp gry są przechowywane w `localStorage` bieżącej przeglądarki. Dane nie są synchronizowane między urządzeniami. Profil można wyczyścić z menu ustawień gry.
+
+## Proponowane następne zmiany
+
+- Dodać testy weryfikujące kompletność słowników i zgodność tłumaczeń PL/EN.
+- Umożliwić zmianę przypisań klawiszy i konfigurację kontrolera z poziomu gry.
+- Skonfigurować CI do uruchamiania `npm ci`, `npm run build` i `npm test` przy każdej zmianie.
+- Dodać zrzuty ekranu oraz instrukcję wdrożenia i hostowania produkcyjnej wersji.
